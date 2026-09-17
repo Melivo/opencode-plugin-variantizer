@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "TypeSafe-gesteuerter OpenAI Variant Router",
+    "output": "001-typesafe-openai-variant-router.archify.html",
+    "quality_profile": "showcase",
+    "viewBox": [1280, 620]
+  },
+  "components": [
+    { "id": "user", "type": "external", "label": "Nutzer", "pos": [30, 230], "size": [100, 56] },
+    { "id": "opencode", "type": "backend", "label": "OpenCode", "sublabel": "Plugin Hooks", "pos": [170, 230], "size": [120, 56] },
+    { "id": "message_intake", "type": "backend", "label": "Message Intake", "sublabel": "chat.message", "pos": [340, 230], "size": [140, 56] },
+    { "id": "context_assembler", "type": "backend", "label": "Context Assembler", "sublabel": "begrenzter Textkontext", "pos": [540, 90], "size": [160, 58] },
+    { "id": "variant_catalog", "type": "security", "label": "Variant Catalog", "sublabel": "validierte Reasoning-Varianten", "pos": [540, 230], "size": [170, 58] },
+    { "id": "typesafe", "type": "cloud", "label": "TypeSafe AI", "sublabel": "dynamische Choice", "pos": [790, 90], "size": [140, 58] },
+    { "id": "decision_store", "type": "database", "label": "Decision Store", "sublabel": "Message-ID, TTL", "pos": [790, 230], "size": [150, 58] },
+    { "id": "params_applier", "type": "backend", "label": "Params Applier", "sublabel": "chat.params", "pos": [1010, 230], "size": [150, 58] },
+    { "id": "openai", "type": "cloud", "label": "OpenAI", "sublabel": "finaler Modell-Request", "pos": [1010, 410], "size": [150, 58] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Lokaler OpenCode-Prozess", "wraps": ["opencode", "message_intake", "context_assembler", "variant_catalog", "decision_store", "params_applier"], "pad": 24 },
+    { "kind": "security-group", "label": "Externe AI-Dienste", "wraps": ["typesafe", "openai"], "pad": 20 }
+  ],
+  "connections": [
+    { "id": "prompt_submit", "from": "user", "to": "opencode", "label": "Prompt absenden", "variant": "emphasis", "labelDy": -24 },
+    { "id": "chat_message", "from": "opencode", "to": "message_intake", "label": "chat.message", "labelDy": -24 },
+    { "id": "build_context", "from": "message_intake", "to": "context_assembler", "label": "Prompt und Verlauf", "labelAt": [520, 180] },
+    { "id": "resolve_variants", "from": "message_intake", "to": "variant_catalog", "label": "Reasoning-Varianten fuer openai/model", "labelDy": 52 },
+    { "id": "typesafe_choice", "from": "context_assembler", "to": "typesafe", "label": "State und dynamische Choice", "variant": "security", "labelAt": [745, 170] },
+    { "id": "store_decision", "from": "typesafe", "to": "decision_store", "label": "Auswahl, Confidence, Wahrscheinlichkeiten", "variant": "dashed", "fromSide": "bottom", "toSide": "top", "labelAt": [950, 188] },
+    { "id": "chat_params", "from": "opencode", "to": "params_applier", "label": "chat.params", "fromSide": "bottom", "toSide": "bottom" },
+    { "id": "consume_decision", "from": "decision_store", "to": "params_applier", "label": "Entscheidung per Message-ID", "labelDy": -26 },
+    { "id": "openai_request", "from": "params_applier", "to": "openai", "label": "validierte Optionen oder Fallback", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "labelAt": [1180, 350] }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "Deterministische Kontrolle", "items": ["Nur verifizierte Modellvarianten", "Confidence-Gate und Fallback im Plugin", "Feldweises Merge der OpenAI-Optionen"] },
+    { "dot": "rose", "title": "Sicherheitsgrenzen", "items": ["Prompt und begrenzter Verlauf gehen an TypeSafe", "Keine Inhalte oder Credentials in Logs", "Nicht-openai Provider werden uebersprungen"] }
+  ]
+}
