@@ -886,14 +886,11 @@ describe("two-phase hook pipeline", () => {
     expect(store.size).toBe(0);
   });
 
-  test("keeps OMA registered and adds the standalone router", async () => {
+  test("keeps OMA registered without duplicating the globally configured router", async () => {
     const config = JSON.parse(await readFile(new URL("../opencode.jsonc", import.meta.url), "utf8"));
     expect(config.plugin).toContain("./plugins/oma/oma.ts");
     const routerEntry = config.plugin.find((entry: unknown) => Array.isArray(entry) && entry[0] === "./plugins/typesafe-variant-router/index.ts");
-    expect(routerEntry).toEqual([
-      "./plugins/typesafe-variant-router/index.ts",
-      { fallbackVariant: "medium", notify: "always" },
-    ]);
+    expect(routerEntry).toBeUndefined();
     const entryModule = await import("../plugins/typesafe-variant-router/index.ts");
     const callableExports = Object.entries(entryModule)
       .filter(([, value]) => typeof value === "function")

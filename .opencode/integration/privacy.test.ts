@@ -5,6 +5,7 @@ import type { VariantCatalog } from "../plugins/typesafe-variant-router/open-cod
 import {
   createTypeSafeVariantRouterPlugin,
   createVariantRouterHooks,
+  formatAppliedVariantNotification,
   TypeSafeVariantRouterPlugin,
 } from "../plugins/typesafe-variant-router/plugin.ts";
 import type { RouterDecision, RouterDiagnostic, TypeSafeScoreClient } from "../plugins/typesafe-variant-router/typesafe-router.ts";
@@ -127,14 +128,14 @@ describe("production privacy boundaries", () => {
         {
           body: {
             title: "TypeSafe variant router",
-            message: "Applied variant \"low\" (fallback:missing-api-key) for openai/gpt-5.",
+            message: "Using fallback variant \"low\" for openai/gpt-5 because the TypeSafe API key is unavailable.",
             variant: "warning",
           },
         },
         {
           body: {
             title: "TypeSafe variant router",
-            message: "Applied variant \"low\" (fallback:missing-api-key) for openai/gpt-5.",
+            message: "Using fallback variant \"low\" for openai/gpt-5 because the TypeSafe API key is unavailable.",
             variant: "warning",
           },
         },
@@ -276,14 +277,14 @@ describe("production privacy boundaries", () => {
       {
         body: {
           title: "TypeSafe variant router",
-          message: "Applied variant \"low\" (fallback:client-error) for openai/gpt-5.",
+          message: "Using fallback variant \"low\" for openai/gpt-5 because the TypeSafe client failed.",
           variant: "warning",
         },
       },
       {
         body: {
           title: "TypeSafe variant router",
-          message: "Applied variant \"low\" (fallback:client-error) for openai/gpt-5.",
+          message: "Using fallback variant \"low\" for openai/gpt-5 because the TypeSafe client failed.",
           variant: "warning",
         },
       },
@@ -330,7 +331,7 @@ describe("production privacy boundaries", () => {
     expect(toasts).toEqual([{
       body: {
         title: "TypeSafe variant router",
-        message: "Applied variant \"low\" (fallback:invalid-response/type) for openai/gpt-5.",
+        message: "Using fallback variant \"low\" for openai/gpt-5 because TypeSafe response validation failed (type).",
         variant: "warning",
       },
     }]);
@@ -342,10 +343,10 @@ describe("production privacy boundaries", () => {
   test("emits exactly one privacy-safe application toast according to each notify mode", async () => {
     const scenarios = [
       { name: "fallback off", notify: "off", manual: false, expected: [] },
-      { name: "fallback enabled", notify: "fallback", manual: false, expected: ["Applied variant \"low\" (fallback:missing-api-key) for openai/gpt-5."] },
-      { name: "fallback always", notify: "always", manual: false, expected: ["Applied variant \"low\" (fallback:missing-api-key) for openai/gpt-5."] },
+      { name: "fallback enabled", notify: "fallback", manual: false, expected: ["Using fallback variant \"low\" for openai/gpt-5 because the TypeSafe API key is unavailable."] },
+      { name: "fallback always", notify: "always", manual: false, expected: ["Using fallback variant \"low\" for openai/gpt-5 because the TypeSafe API key is unavailable."] },
       { name: "manual hidden for fallback-only", notify: "fallback", manual: true, expected: [] },
-      { name: "manual always", notify: "always", manual: true, expected: ["Applied variant \"high\" (manual:selected) for openai/gpt-5."] },
+      { name: "manual always", notify: "always", manual: true, expected: ["Using manual variant \"high\" for openai/gpt-5."] },
     ] as const;
 
     for (const scenario of scenarios) {
@@ -373,6 +374,55 @@ describe("production privacy boundaries", () => {
       expect(JSON.stringify(toasts), scenario.name).not.toContain("PRIVATE_");
       await hooks.dispose?.();
     }
+  });
+
+  test("formats application notifications without duplicate internal labels", () => {
+    const selected = formatAppliedVariantNotification({
+      modelID: "openai/gpt-5.6-sol",
+      variant: "low",
+      status: "selected",
+      reason: "selected",
+    });
+    const manual = formatAppliedVariantNotification({
+      modelID: "openai/gpt-5.6-sol",
+      variant: "high",
+      status: "manual",
+      reason: "selected",
+    });
+    expect(selected).toEqual({
+      message: "Selected variant \"low\" for openai/gpt-5.6-sol.",
+      variant: "info",
+    });
+    expect(manual).toEqual({
+      message: "Using manual variant \"high\" for openai/gpt-5.6-sol.",
+      variant: "info",
+    });
+
+    const fallbackCases = [
+      ["missing-api-key", undefined, "the TypeSafe API key is unavailable"],
+      ["invalid-response", "score", "TypeSafe response validation failed (score)"],
+      ["timeout", undefined, "the TypeSafe request timed out"],
+      ["network-error", undefined, "the TypeSafe network request failed"],
+      ["auth-error", undefined, "TypeSafe authentication failed"],
+      ["rate-limited", undefined, "TypeSafe rate-limited the request"],
+      ["server-error", undefined, "TypeSafe returned a server error"],
+      ["client-error", undefined, "the TypeSafe client failed"],
+    ] as const;
+    const fallbacks = fallbackCases.map(([reason, detail, expectedReason]) => {
+      const notification = formatAppliedVariantNotification({
+        modelID: "openai/gpt-5.6-sol",
+        variant: "medium",
+        status: "fallback",
+        reason,
+        ...(detail ? { detail } : {}),
+      });
+      expect(notification).toEqual({
+        message: `Using fallback variant \"medium\" for openai/gpt-5.6-sol because ${expectedReason}.`,
+        variant: "warning",
+      });
+      return notification;
+    });
+    expect(JSON.stringify({ selected, manual, fallbacks })).not.toContain("selected:selected");
   });
 
   test("forbidden markers never enter diagnostics or Decision Store metadata", async () => {

@@ -449,6 +449,37 @@ export function createVariantRouterHooks(rawConfig: unknown, dependencies: Pipel
   };
 }
 
+export function formatAppliedVariantNotification(application: AppliedVariant): {
+  message: string;
+  variant: "warning" | "info";
+} {
+  if (application.status === "selected") {
+    return { message: `Selected variant "${application.variant}" for ${application.modelID}.`, variant: "info" };
+  }
+  if (application.status === "manual") {
+    return { message: `Using manual variant "${application.variant}" for ${application.modelID}.`, variant: "info" };
+  }
+  const reason = (() => {
+    switch (application.reason) {
+      case "missing-api-key": return "the TypeSafe API key is unavailable";
+      case "invalid-response": return application.detail
+        ? `TypeSafe response validation failed (${application.detail})`
+        : "TypeSafe returned an invalid response";
+      case "timeout": return "the TypeSafe request timed out";
+      case "network-error": return "the TypeSafe network request failed";
+      case "auth-error": return "TypeSafe authentication failed";
+      case "rate-limited": return "TypeSafe rate-limited the request";
+      case "server-error": return "TypeSafe returned a server error";
+      case "client-error": return "the TypeSafe client failed";
+      default: return "routing could not select a variant";
+    }
+  })();
+  return {
+    message: `Using fallback variant "${application.variant}" for ${application.modelID} because ${reason}.`,
+    variant: "warning",
+  };
+}
+
 function productionObservers(input: PluginInput, config: RouterConfig) {
   const levelPriority = { error: 0, warn: 1, info: 2, debug: 3 } as const;
   const loggedDiagnostics = new Set<string>();
@@ -477,11 +508,8 @@ function productionObservers(input: PluginInput, config: RouterConfig) {
       }
       if (config.notify === "off") return;
       if (application.status !== "fallback" && config.notify !== "always") return;
-      const detail = application.detail ? `/${application.detail}` : "";
-      notify(
-        `Applied variant "${application.variant}" (${application.status}:${application.reason}${detail}) for ${application.modelID}.`,
-        application.status === "fallback" ? "warning" : "info",
-      );
+      const notification = formatAppliedVariantNotification(application);
+      notify(notification.message, notification.variant);
     },
   };
 }

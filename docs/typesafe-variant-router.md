@@ -2,20 +2,21 @@
 
 > **Datenschutzhinweis:** Jeder relevante `openai`-User-Prompt wird zur Variantenauswahl an TypeSafe uebertragen. Der Konfigurationsdefault ist `context.mode=recent-messages`; damit kann zusaetzlich ein hart begrenzter User-/Assistant-Textverlauf uebertragen werden. Wer nur den aktuellen Prompt uebertragen will, setzt `context.mode=prompt-only`. Wer auch diese Uebertragung vermeiden will, muss das Plugin deaktivieren oder den API-Key entfernen.
 
-## Lokale Aktivierung
+## Globale Aktivierung
 
-Das eigenstaendige Plugin ist in [`.opencode/opencode.jsonc`](../.opencode/opencode.jsonc) neben OMA registriert:
+Damit der Router in allen OpenCode-Projekten aktiv ist, wird er einmal in `~/.config/opencode/opencode.jsonc` registriert. Diese Entwicklungsinstallation verweist auf die committed Plugin-Quelle in diesem Checkout:
 
 ```jsonc
 [
-  "./plugins/typesafe-variant-router/index.ts",
+  "file:///home/visimeos/Projects/opencode-plugin-variantizer/.opencode/plugins/typesafe-variant-router/index.ts",
   {
-    "fallbackVariant": "medium"
+    "fallbackVariant": "medium",
+    "notify": "always"
   }
 ]
 ```
 
-`fallbackVariant` ist Pflicht. Beim Plugin-Start hat eine nicht leere Prozessvariable `TYPESAFE_API_KEY` Vorrang. Fehlt sie, fuehrt der Linux-/KDE-Prototyp einmalig und ohne Shell folgenden Secret-Service-Lookup aus:
+Die projektlokale [`.opencode/opencode.jsonc`](../.opencode/opencode.jsonc) registriert den Router nicht zusaetzlich; dadurch wird er in diesem Repository wie in anderen Projekten genau einmal geladen. Wird der Checkout verschoben oder geloescht, muss der absolute globale Dateipfad angepasst werden. `fallbackVariant` ist Pflicht. Beim Plugin-Start hat eine nicht leere Prozessvariable `TYPESAFE_API_KEY` Vorrang. Fehlt sie, fuehrt der Linux-/KDE-Prototyp einmalig und ohne Shell folgenden Secret-Service-Lookup aus:
 
 ```sh
 secret-tool lookup service typesafe credential api-key
@@ -129,7 +130,7 @@ Sichere Diagnosecodes sind:
 - `server-error` fuer HTTP 5xx
 - `client-error` fuer sonstige Fehler
 
-Diagnosen enthalten nur `code`, `modelID`, `status` (`fallback` oder `skipped`) und bei `invalid-response` optional ein sicheres `detail`. Die Details `request`, `type`, `probabilities`, `score`, `confidence`, `legend` und `variant` benennen ausschliesslich die verletzte Invariantengruppe und enthalten keine Antwortwerte. Der Router ruft den injizierbaren `onDiagnostic`-Callback fuer jede technische oder ungueltige Routing-Entscheidung auf; identische sichere Diagnose-Logs werden pro Modell, Code, Detail und Status dedupliziert. Benutzerbenachrichtigungen stammen dagegen ausschliesslich aus `onAppliedVariant`, nachdem `chat.params` die validierten Optionen tatsaechlich uebernommen hat. Der Callback enthaelt nur `modelID`, angewandte `variant`, `status` (`selected`, `manual` oder `fallback`), `reason` und optional dasselbe sichere `detail`. `notify=off` unterdrueckt alle Meldungen, `fallback` meldet nur angewandte Fallbacks und `always` zusaetzlich TypeSafe- und manuelle Auswahlen. Damit entsteht pro korreliertem routbaren Turn mit angewandter Variante genau eine Meldung; der aeussere Deadline-Fallback wird als `timeout` klassifiziert, und technische Router-Fallbacks behalten ihren Grund. Ein feldbezogener Fehler erscheint beispielsweise als `fallback:invalid-response/score`. Fehlende oder modellfremde Store-Eintraege erhalten zwar weiterhin nur aktuelle Fallback-Optionen, erzeugen ohne sicher korrelierten routbaren Prompt aber keine Meldung. Keine Meldung enthaelt Prompt, Verlauf, Credential, Fehlerinhalt oder sonstige Rohdaten.
+Diagnosen enthalten nur `code`, `modelID`, `status` (`fallback` oder `skipped`) und bei `invalid-response` optional ein sicheres `detail`. Die Details `request`, `type`, `probabilities`, `score`, `confidence`, `legend` und `variant` benennen ausschliesslich die verletzte Invariantengruppe und enthalten keine Antwortwerte. Der Router ruft den injizierbaren `onDiagnostic`-Callback fuer jede technische oder ungueltige Routing-Entscheidung auf; identische sichere Diagnose-Logs werden pro Modell, Code, Detail und Status dedupliziert. Benutzerbenachrichtigungen stammen dagegen ausschliesslich aus `onAppliedVariant`, nachdem `chat.params` die validierten Optionen tatsaechlich uebernommen hat. Der Callback enthaelt nur `modelID`, angewandte `variant`, `status` (`selected`, `manual` oder `fallback`), `reason` und optional dasselbe sichere `detail`. `notify=off` unterdrueckt alle Meldungen, `fallback` meldet nur angewandte Fallbacks und `always` zusaetzlich TypeSafe- und manuelle Auswahlen. Damit entsteht pro korreliertem routbaren Turn mit angewandter Variante genau eine Meldung; der aeussere Deadline-Fallback wird als `timeout` klassifiziert, und technische Router-Fallbacks behalten ihren Grund. Erfolgreiche Auswahl, manuelle Variante und Fallback erhalten getrennte, lesbare Texte ohne interne Dopplungen wie `selected:selected`. Ein feldbezogener Fehler erscheint beispielsweise als `Using fallback variant "medium" ... because TypeSafe response validation failed (score).` Fehlende oder modellfremde Store-Eintraege erhalten zwar weiterhin nur aktuelle Fallback-Optionen, erzeugen ohne sicher korrelierten routbaren Prompt aber keine Meldung. Keine Meldung enthaelt Prompt, Verlauf, Credential, Fehlerinhalt oder sonstige Rohdaten.
 
 ## Datenschutz und Datenminimierung
 

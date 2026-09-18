@@ -12,6 +12,12 @@ Nachdem die tatsaechlich ausgewaehlte, manuell beibehaltene oder als Fallback an
 
 Die OpenCode-API bietet dabei nur ein globales `variant.cycle`: Der Befehl wirkt auf das Modell, das bei der Verarbeitung im TUI sichtbar ist, und liefert weder Modellidentitaet, exakten Setter noch Verarbeitungsbestaetigung. Ein Modellwechsel nach der letzten Vorpruefung kann deshalb nicht rennbedingungsfrei verhindert oder exakt korrigiert werden. Die sichtbare Anzeige ist ueber Modell-/Session-Wechsel hinweg folglich nur best effort; Provider-Routing und angewandte Modelloptionen bleiben davon unabhaengig korrekt.
 
+## Global in OpenCode aktivieren
+
+Der Router ist als Entwicklungsinstallation einmal in `~/.config/opencode/opencode.jsonc` ueber einen absoluten `file://`-Pfad auf [`.opencode/plugins/typesafe-variant-router/index.ts`](.opencode/plugins/typesafe-variant-router/index.ts) registriert. Dadurch gilt dieselbe Plugin-Konfiguration fuer alle OpenCode-Projekte. [`.opencode/opencode.jsonc`](.opencode/opencode.jsonc) enthaelt bewusst keinen zweiten Router-Eintrag, damit dieses Repository das Plugin nicht doppelt laedt. Nach einer Pfadaenderung des Checkouts muss der globale Dateipfad aktualisiert werden; Konfigurations- oder Plugin-Aenderungen werden erst nach einem OpenCode-Neustart wirksam.
+
+Erfolgreiche Auswahl, manuelle Variante und Fallback werden unterschiedlich formuliert. Eine erfolgreiche Meldung lautet beispielsweise `Selected variant "low" for openai/gpt-5.6-sol.`; Fallback-Meldungen nennen stattdessen einen lesbaren technischen Grund. Interne Kombinationen wie `selected:selected` werden nicht angezeigt.
+
 ## Linux-/KDE-Prototyp einrichten
 
 Der Prototyp liest `TYPESAFE_API_KEY` beim Start von OpenCode zuerst aus der Prozessumgebung. Fehlt die Variable, fragt er einmalig den Linux Secret Service mit `secret-tool` ab. Unter KDE setzt das eine aktive Secret-Service-Integration von KWallet voraus.
