@@ -1,8 +1,13 @@
 # Design: TypeSafe-gesteuerter OpenAI Variant Router
 
-- Status: Approved for planning
+- Status: Superseded
+- Superseded by: [TypeSafe Score Routing](../work/002-typesafe-score-routing.md)
 - Date: 2026-09-17
 - Scope: Lokales OpenCode-Plugin als Vorstufe zu einem spaeteren npm-Paket
+
+> **Historischer Design-Snapshot — keine aktuelle normative Anleitung.** Dieses Dokument bewahrt die verworfene Choice-/Confidence-Architektur als Designbeleg. Die aktive Implementierung verwendet geordnetes TypeSafe `Score`, `argmax(probabilities)` ohne Confidence-Schwellwert, bei exaktem Gleichstand die niedrigere Katalogposition, Fallbacks nur bei technischen Fehlern oder ungueltigen Antworten sowie eine best-effort Synchronisierung der sichtbaren OpenCode-UI-Variante. Alle folgenden Abschnitte beschreiben ausschliesslich den damaligen, abgeloesten Entwurf; aktuelle normative Vorgaben stehen im [superseding Score-Routing-Plan](../work/002-typesafe-score-routing.md) und im operativen [Runbook](../../typesafe-variant-router.md).
+>
+> Der angrenzende, von Archify erzeugte HTML/JSON-Snapshot bleibt absichtlich unveraendert: Er ist Teil dieses historischen Entwurfsbelegs und keine aktuelle Implementierungsdokumentation.
 
 ## Problem
 
@@ -94,7 +99,7 @@ sequenceDiagram
   end
 ```
 
-Interactive: [001-typesafe-openai-variant-router.archify.html](./001-typesafe-openai-variant-router.archify.html)
+Historischer, generierter Snapshot: [001-typesafe-openai-variant-router.archify.html](./001-typesafe-openai-variant-router.archify.html)
 
 ## Komponenten
 

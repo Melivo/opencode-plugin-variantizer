@@ -1,7 +1,14 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "plugin": [
-    "./plugins/oma/oma.ts"
+    "./plugins/oma/oma.ts",
+    [
+      "./plugins/typesafe-variant-router/index.ts",
+      {
+        "fallbackVariant": "medium",
+        "notify": "always"
+      }
+    ]
   ],
   "mcp": {
     "chrome-devtools": {

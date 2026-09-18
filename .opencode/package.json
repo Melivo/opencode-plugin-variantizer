@@ -1,0 +1,20 @@
+{
+  "scripts": {
+    "test": "npm run test:contract && npm run test:unit && npm run test:integration && npm run test:evaluation && npm run test:docs && npm run test:privacy",
+    "test:privacy": "bun test integration/privacy.test.ts",
+    "test:contract": "node --test contract/contract-spike.test.mjs && bun test contract/production-hook-contract.test.ts",
+    "test:integration": "bun test integration",
+    "test:unit": "bun test unit",
+    "test:evaluation": "bun test evaluation/evaluation.test.ts",
+    "test:docs": "bun test evaluation/docs.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "1.18.31",
+    "@typesafe-ai/sdk": "0.6.0",
+    "zod": "4.1.8"
+  },
+  "devDependencies": {
+    "typescript": "5.9.2"
+  }
+}
