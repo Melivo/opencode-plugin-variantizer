@@ -143,7 +143,7 @@ describe("deterministic offline evaluation", () => {
     expect(metrics.fallbackRate).toBe(2 / 3);
     expect(metrics.invalidResponseRate).toBe(0);
     expect(metrics.technicalFallbackRate).toBe(2 / 3);
-    expect(metrics.fallbackReasons).toEqual({ "client-error": 1, timeout: 1 });
+    expect(metrics.fallbackReasons).toEqual({ "client-error": 1, "request-timeout": 1 });
     expect(metrics.variantDistribution["openai/gpt-5"]).toEqual({ medium: 2, low: 1 });
     expect(JSON.stringify(metrics)).not.toContain(cases[0]!.prompt);
     expect(JSON.stringify(metrics)).not.toContain("internal-secret-error");

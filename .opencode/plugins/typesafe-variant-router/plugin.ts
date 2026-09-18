@@ -114,13 +114,14 @@ function timeoutDecision(
   fallbackVariant: string,
   catalog: VariantCatalog,
   createdAt: number,
+  reason: "pre-request-timeout" | "request-timeout",
 ): RouterDecision {
   const hasFallback = catalog.names.includes(fallbackVariant);
   return {
     status: hasFallback ? "fallback" : "skipped",
     modelID,
     ...(hasFallback ? { variant: fallbackVariant } : {}),
-    reason: "timeout",
+    reason,
     createdAt,
   };
 }
@@ -236,6 +237,7 @@ export function createVariantRouterHooks(rawConfig: unknown, dependencies: Pipel
           : Promise.resolve({ messages: [] as readonly unknown[] } as const);
         let decision: Promise<RouterDecision> | undefined;
         let terminal: RouterDecision | undefined;
+        let requestStarted = false;
         const routing: DeferredRouting = {
           start(catalog): Promise<RouterDecision> {
             if (terminal) return Promise.resolve(terminal);
@@ -268,6 +270,7 @@ export function createVariantRouterHooks(rawConfig: unknown, dependencies: Pipel
                   deadlineAt,
                   variantDescriptions: config.variantDescriptions,
                   signal: controller.signal,
+                  onRequestStart: () => { requestStarted = true; },
                 });
               } catch {
                 return controller.signal.aborted
@@ -283,7 +286,13 @@ export function createVariantRouterHooks(rawConfig: unknown, dependencies: Pipel
           timeout(catalog): RouterDecision {
             if (terminal) return terminal;
             controller.abort();
-            terminal = timeoutDecision(modelID, config.fallbackVariant, catalog, createdAt);
+            terminal = timeoutDecision(
+              modelID,
+              config.fallbackVariant,
+              catalog,
+              createdAt,
+              requestStarted ? "request-timeout" : "pre-request-timeout",
+            );
             return terminal;
           },
           terminal(): RouterDecision | undefined {
@@ -378,19 +387,19 @@ export function createVariantRouterHooks(rawConfig: unknown, dependencies: Pipel
         applyCorrelatedFallback("invalid-response", true);
         return;
       }
-      let reportParamsTimeout = false;
+      let paramsTimeoutReason: "pre-request-timeout" | "request-timeout" | undefined;
       let result = routing.terminal();
       if (!result) {
         if (!Number.isFinite(entry.deadlineAt) || entry.deadlineAt <= now()) {
           result = routing.timeout(catalog);
-          reportParamsTimeout = true;
+          paramsTimeoutReason = result.reason === "request-timeout" ? "request-timeout" : "pre-request-timeout";
         } else {
           const settled = await settleBeforeDeadline(routing.start(catalog), entry.deadlineAt, now, setTimer);
           if (settled) {
             result = settled;
           } else {
             result = routing.timeout(catalog);
-            reportParamsTimeout = true;
+            paramsTimeoutReason = result.reason === "request-timeout" ? "request-timeout" : "pre-request-timeout";
           }
         }
       }
@@ -419,8 +428,8 @@ export function createVariantRouterHooks(rawConfig: unknown, dependencies: Pipel
             reason: result.reason,
             ...(result.detail ? { detail: result.detail } : {}),
           },
-          reportParamsTimeout
-            ? { code: "timeout", modelID: catalog.modelKey, status: "fallback" }
+          paramsTimeoutReason
+            ? { code: paramsTimeoutReason, modelID: catalog.modelKey, status: "fallback" }
             : undefined,
         );
       } else {
@@ -465,7 +474,8 @@ export function formatAppliedVariantNotification(application: AppliedVariant): {
       case "invalid-response": return application.detail
         ? `TypeSafe response validation failed (${application.detail})`
         : "TypeSafe returned an invalid response";
-      case "timeout": return "the TypeSafe request timed out";
+      case "pre-request-timeout": return "the routing deadline expired before the TypeSafe request started";
+      case "request-timeout": return "the TypeSafe request exceeded the routing deadline";
       case "network-error": return "the TypeSafe network request failed";
       case "auth-error": return "TypeSafe authentication failed";
       case "rate-limited": return "TypeSafe rate-limited the request";

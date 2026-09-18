@@ -11,6 +11,7 @@ Damit der Router in allen OpenCode-Projekten aktiv ist, wird er einmal in `~/.co
   "file:///home/visimeos/Projects/opencode-plugin-variantizer/.opencode/plugins/typesafe-variant-router/index.ts",
   {
     "fallbackVariant": "medium",
+    "timeoutMs": 5000,
     "notify": "always"
   }
 ]
@@ -123,14 +124,15 @@ Sichere Diagnosecodes sind:
 
 - `missing-api-key`
 - `invalid-response`
-- `timeout`
+- `pre-request-timeout` wenn das gemeinsame Budget vor Beginn des TypeSafe-Aufrufs ablaeuft
+- `request-timeout` wenn das Budget waehrend des TypeSafe-Aufrufs ablaeuft oder der Server HTTP 408 liefert
 - `network-error`
 - `auth-error` fuer HTTP 401/403
 - `rate-limited` fuer HTTP 429
 - `server-error` fuer HTTP 5xx
 - `client-error` fuer sonstige Fehler
 
-Diagnosen enthalten nur `code`, `modelID`, `status` (`fallback` oder `skipped`) und bei `invalid-response` optional ein sicheres `detail`. Die Details `request`, `type`, `probabilities`, `score`, `confidence`, `legend` und `variant` benennen ausschliesslich die verletzte Invariantengruppe und enthalten keine Antwortwerte. Der Router ruft den injizierbaren `onDiagnostic`-Callback fuer jede technische oder ungueltige Routing-Entscheidung auf; identische sichere Diagnose-Logs werden pro Modell, Code, Detail und Status dedupliziert. Benutzerbenachrichtigungen stammen dagegen ausschliesslich aus `onAppliedVariant`, nachdem `chat.params` die validierten Optionen tatsaechlich uebernommen hat. Der Callback enthaelt nur `modelID`, angewandte `variant`, `status` (`selected`, `manual` oder `fallback`), `reason` und optional dasselbe sichere `detail`. `notify=off` unterdrueckt alle Meldungen, `fallback` meldet nur angewandte Fallbacks und `always` zusaetzlich TypeSafe- und manuelle Auswahlen. Damit entsteht pro korreliertem routbaren Turn mit angewandter Variante genau eine Meldung; der aeussere Deadline-Fallback wird als `timeout` klassifiziert, und technische Router-Fallbacks behalten ihren Grund. Erfolgreiche Auswahl, manuelle Variante und Fallback erhalten getrennte, lesbare Texte ohne interne Dopplungen wie `selected:selected`. Ein feldbezogener Fehler erscheint beispielsweise als `Using fallback variant "medium" ... because TypeSafe response validation failed (score).` Fehlende oder modellfremde Store-Eintraege erhalten zwar weiterhin nur aktuelle Fallback-Optionen, erzeugen ohne sicher korrelierten routbaren Prompt aber keine Meldung. Keine Meldung enthaelt Prompt, Verlauf, Credential, Fehlerinhalt oder sonstige Rohdaten.
+Diagnosen enthalten nur `code`, `modelID`, `status` (`fallback` oder `skipped`) und bei `invalid-response` optional ein sicheres `detail`. Die Details `request`, `type`, `probabilities`, `score`, `confidence`, `legend` und `variant` benennen ausschliesslich die verletzte Invariantengruppe und enthalten keine Antwortwerte. Der Router ruft den injizierbaren `onDiagnostic`-Callback fuer jede technische oder ungueltige Routing-Entscheidung auf; identische sichere Diagnose-Logs werden pro Modell, Code, Detail und Status dedupliziert. Benutzerbenachrichtigungen stammen dagegen ausschliesslich aus `onAppliedVariant`, nachdem `chat.params` die validierten Optionen tatsaechlich uebernommen hat. Der Callback enthaelt nur `modelID`, angewandte `variant`, `status` (`selected`, `manual` oder `fallback`), `reason` und optional dasselbe sichere `detail`. `notify=off` unterdrueckt alle Meldungen, `fallback` meldet nur angewandte Fallbacks und `always` zusaetzlich TypeSafe- und manuelle Auswahlen. Damit entsteht pro korreliertem routbaren Turn mit angewandter Variante genau eine Meldung; ein Deadline-Fallback vor Beginn des TypeSafe-Aufrufs wird als `pre-request-timeout`, ein bereits laufender oder vom SDK gemeldeter Timeout als `request-timeout` klassifiziert, und andere technische Router-Fallbacks behalten ihren Grund. Erfolgreiche Auswahl, manuelle Variante und Fallback erhalten getrennte, lesbare Texte ohne interne Dopplungen wie `selected:selected`. Ein feldbezogener Fehler erscheint beispielsweise als `Using fallback variant "medium" ... because TypeSafe response validation failed (score).` Fehlende oder modellfremde Store-Eintraege erhalten zwar weiterhin nur aktuelle Fallback-Optionen, erzeugen ohne sicher korrelierten routbaren Prompt aber keine Meldung. Keine Meldung enthaelt Prompt, Verlauf, Credential, Fehlerinhalt oder sonstige Rohdaten.
 
 ## Datenschutz und Datenminimierung
 

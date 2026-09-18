@@ -16,7 +16,7 @@ Die OpenCode-API bietet dabei nur ein globales `variant.cycle`: Der Befehl wirkt
 
 Der Router ist als Entwicklungsinstallation einmal in `~/.config/opencode/opencode.jsonc` ueber einen absoluten `file://`-Pfad auf [`.opencode/plugins/typesafe-variant-router/index.ts`](.opencode/plugins/typesafe-variant-router/index.ts) registriert. Dadurch gilt dieselbe Plugin-Konfiguration fuer alle OpenCode-Projekte. [`.opencode/opencode.jsonc`](.opencode/opencode.jsonc) enthaelt bewusst keinen zweiten Router-Eintrag, damit dieses Repository das Plugin nicht doppelt laedt. Nach einer Pfadaenderung des Checkouts muss der globale Dateipfad aktualisiert werden; Konfigurations- oder Plugin-Aenderungen werden erst nach einem OpenCode-Neustart wirksam.
 
-Erfolgreiche Auswahl, manuelle Variante und Fallback werden unterschiedlich formuliert. Eine erfolgreiche Meldung lautet beispielsweise `Selected variant "low" for openai/gpt-5.6-sol.`; Fallback-Meldungen nennen stattdessen einen lesbaren technischen Grund. Interne Kombinationen wie `selected:selected` werden nicht angezeigt.
+Die globale Installation verwendet ein Gesamtbudget von `5000 ms`. Erfolgreiche Auswahl, manuelle Variante und Fallback werden unterschiedlich formuliert. Eine erfolgreiche Meldung lautet beispielsweise `Selected variant "low" for openai/gpt-5.6-sol.`; Fallback-Meldungen nennen stattdessen einen lesbaren technischen Grund. Interne Kombinationen wie `selected:selected` werden nicht angezeigt.
 
 ## Linux-/KDE-Prototyp einrichten
 

@@ -31,7 +31,7 @@ const deferredRouting = (producer: (catalog: VariantCatalog) => Promise<RouterDe
       return decision;
     },
     timeout(catalog: VariantCatalog): RouterDecision {
-      terminalDecision ??= { status: "fallback", modelID: catalog.modelKey, variant: "low", reason: "timeout", createdAt: 0 };
+      terminalDecision ??= { status: "fallback", modelID: catalog.modelKey, variant: "low", reason: "pre-request-timeout", createdAt: 0 };
       return terminalDecision;
     },
     terminal(): RouterDecision | undefined {
@@ -176,7 +176,7 @@ describe("two-phase hook pipeline", () => {
       modelID: "openai/gpt-5",
       variant: "low",
       status: "fallback",
-      reason: "timeout",
+      reason: "pre-request-timeout",
     }]);
   });
 
@@ -350,12 +350,12 @@ describe("two-phase hook pipeline", () => {
     await pending;
 
     expect(output.options.reasoningEffort).toBe("low");
-    expect(diagnostics).toEqual([{ code: "timeout", modelID: "openai/gpt-5", status: "fallback" }]);
+    expect(diagnostics).toEqual([{ code: "pre-request-timeout", modelID: "openai/gpt-5", status: "fallback" }]);
     expect(applied).toEqual([{
       modelID: "openai/gpt-5",
       variant: "low",
       status: "fallback",
-      reason: "timeout",
+      reason: "pre-request-timeout",
     }]);
   });
 

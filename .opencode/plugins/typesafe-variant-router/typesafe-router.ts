@@ -37,7 +37,8 @@ export type RouterReason =
   | "not-routable"
   | "missing-api-key"
   | "invalid-response"
-  | "timeout"
+  | "pre-request-timeout"
+  | "request-timeout"
   | "network-error"
   | "auth-error"
   | "rate-limited"
@@ -79,6 +80,7 @@ type RouteInput = {
   deadlineAt: number;
   variantDescriptions: Readonly<Record<string, string>>;
   signal?: AbortSignal;
+  onRequestStart?: () => void;
 };
 
 type RouterDependencies = {
@@ -244,11 +246,11 @@ export function validateTypeSafeScoreAnswer(
 function errorReason(error: unknown): Exclude<RouterReason, "selected" | "invalid-response" | "missing-api-key" | "not-routable"> {
   const status = isRecord(error) && typeof error.status === "number" ? error.status : undefined;
   if (status === 401 || status === 403) return "auth-error";
-  if (status === 408) return "timeout";
+  if (status === 408) return "request-timeout";
   if (status === 429) return "rate-limited";
   if (status !== undefined && status >= 500 && status <= 599) return "server-error";
   const name = error instanceof Error ? error.name : isRecord(error) && typeof error.name === "string" ? error.name : "";
-  if (name === "APITimeoutError" || name === "TimeoutError") return "timeout";
+  if (name === "APITimeoutError" || name === "TimeoutError") return "request-timeout";
   if (name === "APIConnectionError" || name === "TypeError") return "network-error";
   return "client-error";
 }
@@ -309,7 +311,7 @@ export function createTypeSafeRouter(dependencies: RouterDependencies = {}) {
       const callBudgetMs = input.deadlineAt - callStartedAt;
       if (!Number.isFinite(callBudgetMs) || callBudgetMs <= 0) {
         input.signal?.removeEventListener("abort", cancel);
-        return finish(input, "timeout", createdAt);
+        return finish(input, "pre-request-timeout", createdAt);
       }
 
       let resolveDeadline: ((value: SettledCall) => void) | undefined;
@@ -320,6 +322,7 @@ export function createTypeSafeRouter(dependencies: RouterDependencies = {}) {
       }, callBudgetMs);
       let call: Promise<SettledCall>;
       try {
+        input.onRequestStart?.();
         call = Promise.resolve(dependencies.client.score(request, {
           signal: controller.signal,
           timeoutMs: callBudgetMs,
@@ -337,7 +340,7 @@ export function createTypeSafeRouter(dependencies: RouterDependencies = {}) {
       if (settled.kind === "cancelled") {
         return { status: "skipped", modelID: input.modelID, reason: "not-routable", createdAt };
       }
-      if (settled.kind === "deadline") return finish(input, "timeout", createdAt);
+      if (settled.kind === "deadline") return finish(input, "request-timeout", createdAt);
       if (settled.kind === "error") return finish(input, errorReason(settled.error), createdAt);
 
       const validation = validateTypeSafeScoreAnswer(settled.answer, input.catalog.names);

@@ -401,7 +401,8 @@ describe("production privacy boundaries", () => {
     const fallbackCases = [
       ["missing-api-key", undefined, "the TypeSafe API key is unavailable"],
       ["invalid-response", "score", "TypeSafe response validation failed (score)"],
-      ["timeout", undefined, "the TypeSafe request timed out"],
+      ["pre-request-timeout", undefined, "the routing deadline expired before the TypeSafe request started"],
+      ["request-timeout", undefined, "the TypeSafe request exceeded the routing deadline"],
       ["network-error", undefined, "the TypeSafe network request failed"],
       ["auth-error", undefined, "TypeSafe authentication failed"],
       ["rate-limited", undefined, "TypeSafe rate-limited the request"],

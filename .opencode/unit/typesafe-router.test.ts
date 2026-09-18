@@ -248,7 +248,7 @@ describe("TypeSafe Score router", () => {
     const result = await router.route({ ...routeInput, deadlineAt: 1_010 });
 
     expect(scoreCalls).toBe(0);
-    expect(result).toMatchObject({ status: "fallback", variant: "low", reason: "timeout" });
+    expect(result).toMatchObject({ status: "fallback", variant: "low", reason: "pre-request-timeout" });
   });
 
   test("uses one absolute deadline for SDK retries and plugin waiting, ignoring a late response", async () => {
@@ -274,24 +274,24 @@ describe("TypeSafe Score router", () => {
     expect(requestOptions?.signal.aborted).toBe(false);
     clock.advanceBy(120);
     const timedOut = await pending;
-    expect(timedOut).toMatchObject({ status: "fallback", variant: "low", reason: "timeout" });
+    expect(timedOut).toMatchObject({ status: "fallback", variant: "low", reason: "request-timeout" });
     expect(requestOptions?.signal.aborted).toBe(true);
 
     if (!capturedRequest) throw new Error("expected captured Score request");
     resolveLate?.(answer(capturedRequest.criteria, { 0: 0, 1: 1 }, 1));
     await Promise.resolve();
-    expect(timedOut).toMatchObject({ status: "fallback", variant: "low", reason: "timeout" });
+    expect(timedOut).toMatchObject({ status: "fallback", variant: "low", reason: "request-timeout" });
   });
 
   test("maps missing key, auth, rate limit, server, network, and timeout failures deterministically", async () => {
     const scenarios: Array<[unknown, string]> = [
       [Object.assign(new Error("PRIVATE_ERROR_BODY_a1"), { status: 401, responseBody: "PRIVATE_ERROR_BODY_a1" }), "auth-error"],
       [Object.assign(new Error("PRIVATE_ERROR_BODY_b2"), { status: 403 }), "auth-error"],
-      [Object.assign(new Error("PRIVATE_ERROR_BODY_c3"), { status: 408 }), "timeout"],
+      [Object.assign(new Error("PRIVATE_ERROR_BODY_c3"), { status: 408 }), "request-timeout"],
       [Object.assign(new Error("PRIVATE_ERROR_BODY_c4"), { status: 429 }), "rate-limited"],
       [Object.assign(new Error("PRIVATE_ERROR_BODY_d4"), { status: 503 }), "server-error"],
       [Object.assign(new Error("PRIVATE_ERROR_BODY_e5"), { name: "APIConnectionError" }), "network-error"],
-      [Object.assign(new Error("PRIVATE_ERROR_BODY_f6"), { name: "APITimeoutError" }), "timeout"],
+      [Object.assign(new Error("PRIVATE_ERROR_BODY_f6"), { name: "APITimeoutError" }), "request-timeout"],
     ];
 
     const missing = await createTypeSafeRouter({ now: () => 1_000 }).route(routeInput);
