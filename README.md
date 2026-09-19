@@ -26,25 +26,23 @@ The plugin then selects a reasoning variant for the chosen model. Depending on t
 ## Requirements
 
 - OpenCode 1.18.31 or newer
-- Node.js with `npm`
 - a TypeSafe API key
 - Linux: `secret-tool` and a working Secret Service integration if the key is not provided through the environment
 
 ## Installation
 
-Register the plugin once globally in OpenCode. The configuration file is:
+Add the npm package to your global OpenCode configuration at:
 
 ```text
 ~/.config/opencode/opencode.jsonc
 ```
 
-Use the absolute path to the plugin entry point:
-
 ```jsonc
 {
+  "$schema": "https://opencode.ai/config.json",
   "plugin": [
     [
-      "file:///ABSOLUTE/PATH/opencode-plugin-variantizer/.opencode/plugins/typesafe-variant-router/index.ts",
+      "opencode-plugin-variantizer",
       {
         "fallbackVariant": "medium",
         "notify": "always",
@@ -55,7 +53,18 @@ Use the absolute path to the plugin entry point:
 }
 ```
 
-Restart OpenCode after changing the plugin or OpenCode configuration.
+OpenCode installs npm plugins and their dependencies automatically with Bun. Quit and restart OpenCode after changing the configuration.
+
+For local development, replace the npm package name with an absolute file URL to the checked-out entry point:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [
+    "file:///ABSOLUTE/PATH/opencode-plugin-variantizer/src/index.ts"
+  ]
+}
+```
 
 ## API key
 
@@ -131,4 +140,8 @@ The OpenCode log is typically located at:
 
 ## Further documentation
 
-The complete configuration reference, privacy details, and OpenCode TUI synchronization notes are available in [`docs/typesafe-variant-router.md`](docs/typesafe-variant-router.md).
+The complete configuration reference, privacy details, and OpenCode TUI synchronization notes are available in [`docs/typesafe-variant-router.md`](https://github.com/Melivo/opencode-plugin-variantizer/blob/main/docs/typesafe-variant-router.md).
+
+## License
+
+MIT — see [LICENSE](LICENSE).
