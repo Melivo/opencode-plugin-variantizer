@@ -12,5 +12,12 @@ docs/plans/
 .migration-backup/
 .qwen/tmp/
 
+# Local agent and OpenCode configuration (never commit)
+/.agents/
+/.codex/
+/.opencode/
+/AGENTS.md
+/opencode.jsonc
+
 # Root package dependencies
 /node_modules/
