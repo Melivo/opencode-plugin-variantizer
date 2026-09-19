@@ -1,10 +1,10 @@
-# TypeSafe OpenAI Variant Router lokal betreiben
+# Run the TypeSafe primary-agent and variant router locally
 
-> **Datenschutzhinweis:** Jeder relevante `openai`-User-Prompt wird zur Variantenauswahl an TypeSafe uebertragen. Der Konfigurationsdefault ist `context.mode=recent-messages`; damit kann zusaetzlich ein hart begrenzter User-/Assistant-Textverlauf uebertragen werden. Wer nur den aktuellen Prompt uebertragen will, setzt `context.mode=prompt-only`. Wer auch diese Uebertragung vermeiden will, muss das Plugin deaktivieren oder den API-Key entfernen.
+> **Privacy notice:** Every eligible agent-routed `openai` user prompt is sent to TypeSafe. The request also contains task-fit agent profiles, fixed model premises, and validated runtime reasoning-catalog names and descriptions. Source agent/model and topology metadata remain local and are not part of the TypeSafe judgment state. The configuration default is `context.mode=recent-messages`, which may additionally disclose a strictly bounded chronological history of user and assistant text. Set `context.mode=prompt-only` to omit history. Disable the plugin or remove the API key to avoid sending the current prompt.
 
-## Globale Aktivierung
+## Global activation
 
-Damit der Router in allen OpenCode-Projekten aktiv ist, wird er einmal in `~/.config/opencode/opencode.jsonc` registriert. Diese Entwicklungsinstallation verweist auf die committed Plugin-Quelle in diesem Checkout:
+To activate the router in every OpenCode project, register it once in `~/.config/opencode/opencode.jsonc`. This development installation points to the committed plugin source in this checkout:
 
 ```jsonc
 [
@@ -12,52 +12,128 @@ Damit der Router in allen OpenCode-Projekten aktiv ist, wird er einmal in `~/.co
   {
     "fallbackVariant": "medium",
     "timeoutMs": 5000,
-    "notify": "always"
+    "notify": "always",
+    "agentSelection": {
+      "enabled": true,
+      "manualAgentPolicy": "typesafe-first",
+      "agents": {
+        "luna": "openai/gpt-5.6-luna",
+        "terra": "openai/gpt-5.6-terra",
+        "sol": "openai/gpt-5.6-sol"
+      },
+      "ring": ["luna", "terra", "sol"],
+      "tuiSync": { "enabled": true }
+    }
   }
 ]
 ```
 
-Die projektlokale [`.opencode/opencode.jsonc`](../.opencode/opencode.jsonc) registriert den Router nicht zusaetzlich; dadurch wird er in diesem Repository wie in anderen Projekten genau einmal geladen. Wird der Checkout verschoben oder geloescht, muss der absolute globale Dateipfad angepasst werden. `fallbackVariant` ist Pflicht. Beim Plugin-Start hat eine nicht leere Prozessvariable `TYPESAFE_API_KEY` Vorrang. Fehlt sie, fuehrt der Linux-/KDE-Prototyp einmalig und ohne Shell folgenden Secret-Service-Lookup aus:
+The project-local [`.opencode/opencode.jsonc`](../.opencode/opencode.jsonc) does not register the router again, so this repository loads it exactly once, just like other projects. If the checkout is moved or deleted, update the absolute global file path. `fallbackVariant` is required. When the plugin starts, a non-empty `TYPESAFE_API_KEY` process variable takes precedence. If it is missing, the Linux/KDE prototype performs the following Secret Service lookup once and without a shell:
 
 ```sh
 secret-tool lookup service typesafe credential api-key
 ```
 
-`secret-tool` wird je nach Distribution beispielsweise durch `libsecret-tools` bereitgestellt. Unter KDE muss KWallet eine aktive Secret-Service-Integration bereitstellen. Der Key wird einmalig und interaktiv unter dem festen Attributschema gespeichert:
+Depending on the distribution, `secret-tool` is provided by a package such as `libsecret-tools`. On KDE, KWallet must provide an active Secret Service integration. Store the key once and interactively under the fixed attribute schema:
 
 ```sh
 secret-tool store --label="TypeSafe API Key" service typesafe credential api-key
 ```
 
-Der geheime Wert wird auf der interaktiven Eingabe eingegeben, nicht als Kommandozeilenargument. Der Lookup hat ein Timeout von fuenf Sekunden und ein Ausgabelimit von 8192 Bytes. Key, stdout, stderr und Fehlerdetails werden nicht geloggt oder persistiert. Ist `secret-tool` nicht installiert, der Secret Service nicht verfuegbar oder der Eintrag nicht vorhanden, wird kein TypeSafe-Client erstellt; OpenCode startet normal und ein nachweislich gueltiger Fallback kann weiterhin angewandt werden.
+Enter the secret value at the interactive prompt, not as a command-line argument. The lookup has a five-second timeout and an output limit of 8192 bytes. The key, stdout, stderr, and error details are not logged or persisted. If `secret-tool` is not installed, the Secret Service is unavailable, or the entry does not exist, no TypeSafe client is created. OpenCode starts normally, and a demonstrably valid fallback can still be applied.
 
-Eine Prozessvariable bleibt beispielsweise fuer CI oder einen einzelnen Prozess moeglich:
+A process variable remains available for CI or a single process, for example:
 
 ```sh
 TYPESAFE_API_KEY="..." opencode
 ```
 
-Der Key darf nicht in `opencode.jsonc`, `.env`-Dateien, Logs, Test-Fixtures oder Dokumentation stehen. Das Plugin verarbeitet ausschliesslich echte Text-User-Turns mit `providerID=openai`. Andere Provider, synthetische Nachrichten und Nichttext-Turns bleiben unveraendert und erzeugen keinen TypeSafe-Aufruf. Der automatische Secret-Service-Pfad ist in dieser Prototypversion bewusst Linux-/KDE-spezifisch.
+The key must not appear in `opencode.jsonc`, `.env` files, logs, test fixtures, or documentation. The plugin processes only real text user turns with `providerID=openai`. Other providers, synthetic messages, and non-text turns remain unchanged and do not trigger a TypeSafe request. The automatic Secret Service path is deliberately specific to Linux/KDE in this prototype.
 
-## Vollstaendiger Konfigurationsvertrag
+## Complete configuration contract
 
-Unbekannte Felder werden abgewiesen. Alle Variantennamen muessen nicht leer und hoechstens 128 Zeichen lang sein; Modellschluessel duerfen hoechstens 256 Zeichen lang sein.
+Unknown fields are rejected. All variant names must be non-empty and at most 128 characters long; model keys may be at most 256 characters long.
 
-| Feld | Zulassung | Default / Wirkung |
+| Field | Accepted value | Default / effect |
 |---|---|---|
-| `enabled` | boolean | `true`; bei `false` vollstaendiger Bypass |
-| `fallbackVariant` | nicht leerer String | **kein Default, Pflichtfeld**; muss in jedem explizit konfigurierten Modell eine aktive, verifizierte Reasoning-Variante sein |
-| `timeoutMs` | positive Ganzzahl, maximal `30000` | `1500`; absolutes Gesamtbudget in Millisekunden |
-| `manualVariantPolicy` | `typesafe-first` oder `manual-first` | `typesafe-first` |
-| `context.mode` | `prompt-only` oder `recent-messages` | `recent-messages` |
-| `context.maxMessages` | positive Ganzzahl, maximal `100` | `6` |
-| `context.maxChars` | positive Ganzzahl, maximal `100000` | `12000`; gemeinsames hartes Zeichenbudget fuer aktuellen Prompt und erlaubten Verlauf |
-| `variantsByModel` | Map `provider/model -> variant -> definition` | `{}` |
-| `variantDescriptions` | Map `variant -> String` (1 bis 4000 Zeichen) | `{}`; bekannte Profile erhalten eingebaute Kriterien |
-| `notify` | `off`, `fallback` oder `always` | `fallback`; `off` zeigt nichts, `fallback` nur tatsaechlich angewandte Fallbacks und `always` auch angewandte TypeSafe-/manuelle Auswahlen; jede Meldung nennt die angewandte Variante |
-| `logLevel` | `error`, `warn`, `info` oder `debug` | `warn`; steuert sichere Produktionslogs, waehrend der TypeSafe-SDK-Logger fest auf `off` steht |
+| `enabled` | boolean | `true`; complete bypass when `false` |
+| `fallbackVariant` | non-empty string | **no default; required**; must be an active, verified reasoning variant in every explicitly configured model |
+| `timeoutMs` | positive integer, maximum `30000` | `1500`; bounded per-invocation budget in milliseconds |
+| `manualVariantPolicy` | `typesafe-first` or `manual-first` | `typesafe-first`; used by variant-only mode |
+| `agentSelection.enabled` | boolean | `true`; enables primary-agent routing; `false` preserves variant-only mode |
+| `agentSelection.manualAgentPolicy` | `typesafe-first` or `manual-first` | `typesafe-first` |
+| `agentSelection.agents.luna` | exact model ID | `openai/gpt-5.6-luna` |
+| `agentSelection.agents.terra` | exact model ID | `openai/gpt-5.6-terra` |
+| `agentSelection.agents.sol` | exact model ID | `openai/gpt-5.6-sol` |
+| `agentSelection.ring` | exact tuple | `["luna", "terra", "sol"]` |
+| `agentSelection.tuiSync.enabled` | boolean | `true`; capability-gated and currently unavailable on the pinned host |
+| `context.mode` | `prompt-only` or `recent-messages` | `recent-messages` |
+| `context.maxMessages` | positive integer, maximum `100` | `6` |
+| `context.maxChars` | positive integer, maximum `100000` | `12000`; shared hard character budget for the current prompt and permitted history |
+| `variantsByModel` | map `provider/model -> variant -> definition` | `{}` |
+| `variantDescriptions` | map `variant -> String` (1 to 4000 characters) | `{}`; known profiles receive built-in criteria |
+| `notify` | `off`, `fallback`, or `always` | `fallback`; `off` displays nothing, `fallback` displays only fallbacks that were actually applied, and `always` also displays applied TypeSafe and manual selections; every message names the applied variant |
+| `logLevel` | `error`, `warn`, `info`, or `debug` | `warn`; controls safe production logs, while the TypeSafe SDK logger is fixed at `off` |
 
-Eine Definition in `variantsByModel` hat diese strikte Form:
+### Breaking migration and exact primary topology
+
+`agentSelection.enabled=true` is an intentional breaking default. Existing installations that require the previous variant-only behavior must explicitly set:
+
+```jsonc
+{
+  "agentSelection": {
+    "enabled": false
+  }
+}
+```
+
+The plugin does not rewrite existing user configuration. When enabled, the static schema requires the exact IDs, bindings, and ring shown above; unknown fields, alternate bindings, reordered or duplicate ring entries, and extra candidates are startup configuration errors rather than silent downgrades.
+
+| Agent | Fixed model | TypeSafe task-fit criterion |
+|---|---|---|
+| `luna` | `openai/gpt-5.6-luna` | Boilerplate, extraction, formatting, and simple helper tasks with objective verification. Use only for narrow, low-risk, repeatable work with clear checks. |
+| `terra` | `openai/gpt-5.6-terra` | Clearly specified local code changes and structured subtasks with bounded scope and clear acceptance criteria; not difficult architecture or broad ambiguous changes. |
+| `sol` | `openai/gpt-5.6-sol` | Normal backend/frontend/mobile implementation, medium refactorings, code review, cross-file work, behavior preservation, integration, lifecycle/state complexity, and stronger autonomous repository work. |
+
+The OpenCode host configuration disables built-in `build` and `plan`, leaving exactly the build-capable `luna`, `terra`, and `sol` primaries. Their project-owned effective behavior is equal except for name, description, and model.
+
+OpenCode 1.18.31 lists the visible primaries in the order `luna`, `sol`, `terra`. The public `agent.cycle.reverse` command therefore traverses the logical reverse-cycle ring `luna -> terra -> sol -> luna`. Configuration order alone is not treated as runtime evidence.
+
+### Capability outcomes
+
+| Gate | Outcome | Operational effect |
+|---|---|---|
+| G1 current-turn tuple | **PASS** | Source agent/model authority, complete pre-binding tuple propagation, composite hook correlation, provider abort on mismatch, and no resend are proven. |
+| G2 exact primary ring | **PASS** | Disabled built-ins, exact primary membership and bindings, behavior equality, secondary exclusion, and reverse-cycle order/wrap are proven. |
+| G3 selector projection | **UNAVAILABLE** | Current-turn routing continues, but selector synchronization publishes no `agent.cycle.reverse` or other agent command. |
+
+G3 is unavailable because a targetless publish payload has no session identifier, cross-session selector scope is not authoritatively observable, and timeout delivery state is not authoritatively observable. The production unavailable branch has no command publisher or scheduling API. With `agentSelection.tuiSync.enabled=true`, it retains no session or turn entries and may emit one sanitized `agent-sync-unavailable` diagnostic containing only bounded reason codes. Publication success is not used as selector confirmation.
+
+### Mixed TypeSafe request and manual-agent policies
+
+Each eligible agent-routed turn makes one `systemOne` request containing exactly four independent questions:
+
+1. `target_agent`: Choice over exactly `luna`, `terra`, and `sol`.
+2. `reasoning_for_luna`: Score over Luna's validated runtime catalog under `openai/gpt-5.6-luna`.
+3. `reasoning_for_terra`: Score over Terra's validated runtime catalog under `openai/gpt-5.6-terra`.
+4. `reasoning_for_sol`: Score over Sol's validated runtime catalog under `openai/gpt-5.6-sol`.
+
+`target_agent` is judged solely from the current task context and these task-fit criteria. The source or currently selected agent, topology generation, and behavior fingerprints are intentionally absent from the TypeSafe state; no balancing, rotation, or stickiness preference participates in model choice. Source identity remains local for eligibility validation, unchanged-message fallback, correlation, and `manual-first` locking.
+
+The response must contain exactly these IDs and types, exact candidate/legend keys, finite values in range, and probabilities summing within the implementation tolerance. Agent ties use `luna`, `terra`, `sol`; variant ties use runtime catalog order. Deterministic code consumes only the selected agent's Score, although all four answers are validated. Detailed unused Score answers are not logged or retained.
+
+- **`typesafe-first`**: every eligible turn may route to any ring agent according only to task fit. The source remains local fallback and validation input, is not disclosed in the TypeSafe judgment state, and does not create a persistent lock.
+- **`manual-first`**: the first eligible source establishes a baseline. A transition explained by the active plugin path does not lock; unchanged source while synchronization is pending means failed or unobserved synchronization. An unexplained source transition creates a session lock on agent and model, not variant. While locked, the request still contains all four questions, deterministic code ignores `target_agent`, and only the locked agent's Score is consumed. Session cleanup or explicit reset clears the lock. This policy uses operational transition rules and does not establish human intent.
+
+### Failure and lifecycle boundaries
+
+The initial `chat.message` route uses one absolute `timeoutMs` deadline for bounded context preparation, topology/catalog acquisition, TypeSafe work, final validation, and the immediate precommit check. Each later `chat.params` call starts a fresh `timeoutMs` budget for topology revalidation because the original turn-routing deadline is necessarily expired during long tool cycles; that fresh budget applies only to the current validation and never authorizes rerouting. Capacity is reserved before routing; in-flight committed-route records are not evicted. Exact unexpired invalidation tombstones are never evicted under capacity pressure. If their bounded map fills, one bounded overflow marker makes ambiguous missing identities fail closed until the committed-route TTL elapses without consuming or evicting pending route entries. Session deletion, TTL cleanup, cancellation, and plugin disposal clear or abort their bounded work, and late completion cannot mutate a later turn.
+
+After complete validation, `chat.message` synchronously assigns `output.message.agent` and the complete `output.message.model` object, including `model.variant`, before model binding. This is a sequence of validated assignments, not a transaction guarantee. Credential, context, timeout, cancellation, TypeSafe, topology, catalog, response, fingerprint, storage, or validation failure before those assignments leaves all three fields unchanged. Agent-selection mode does not invoke variant-only fallback afterward and makes no second TypeSafe request.
+
+At `chat.params`, the same `(sessionID, messageID)` must match the committed agent/model/variant and topology, behavior, catalog, and options fingerprints. The active route and canonical input agent/model/variant tuple are checked both before and immediately after awaited topology acquisition, before provider options can change. A mismatch aborts before provider invocation; repeated valid application is idempotent. Later host, registry, option, resolution, or provider failures are reported as late failures. No failure substitutes a different route, starts a second provider attempt, resends the prompt, or reverses the bound route.
+
+A definition in `variantsByModel` has this strict form:
 
 ```json
 {
@@ -69,39 +145,39 @@ Eine Definition in `variantsByModel` hat diese strikte Form:
 }
 ```
 
-`reasoning` ist Pflicht und muss fuer eine waehlbare Variante `true` sein. `disabled` ist optional. `options` muss ein nicht leeres, sicher klonbares JSON-Objekt sein. Das Plugin erfindet weder Varianten noch Provider-Optionen: Es uebernimmt nur defensiv validierte Runtime-Optionen beziehungsweise explizit konfigurierte Optionsobjekte. Runtime-Definitionen haben bei Namenskollision Vorrang. Die Modellschluessel verwenden die Form `openai/<modelID>`.
+`reasoning` is required and must be `true` for a selectable variant. `disabled` is optional. `options` must be a non-empty, safely cloneable JSON object. The plugin invents neither variants nor provider options: it accepts only defensively validated runtime options or explicitly configured option objects. Runtime definitions take precedence on name collisions. Model keys use the form `openai/<modelID>`.
 
-## Score-Auswahl und Katalogreihenfolge
+## Variant-only TypeSafe Score selection and catalog order
 
-Der Router stellt TypeSafe [`Score`](https://docs.typesafe.ai/primitives/score.md) den erneut validierten Variantenkatalog als geordnete Kriterienliste bereit. Die Runtime-Reihenfolge bleibt erhalten; explizit konfigurierte, noch nicht vorhandene Varianten werden deterministisch danach eingeordnet. Die eingebauten Profile folgen den offiziellen OpenAI-Semantiken fuer [`none`, `low`, `medium`, `high`, `xhigh` und `max`](https://platform.openai.com/docs/guides/reasoning):
+The router supplies TypeSafe [`Score`](https://docs.typesafe.ai/primitives/score.md) with the revalidated variant catalog as an ordered criteria list. Runtime order is preserved; explicitly configured variants that are not already present are placed deterministically after it. The built-in profiles follow the official OpenAI semantics for [`none`, `low`, `medium`, `high`, `xhigh`, and `max`](https://platform.openai.com/docs/guides/reasoning):
 
-- `none`: keine zusaetzliche Reasoning-Arbeit fuer direkte, latenzkritische Aufgaben;
-- `low`: effizientes Reasoning fuer einfache Planung, Suche und Werkzeugnutzung;
-- `medium`: ausgewogenes Reasoning fuer substanzielle Arbeit mit mehreren koordinierten Schritten;
-- `high`: tieferes Reasoning fuer schwieriges Debugging, Planung und komplexe Abwaegungen;
-- `xhigh`: sehr tiefes Reasoning fuer besonders anspruchsvolle, langlaufende oder risikoreiche Aufgaben;
-- `max`: die maximal verfuegbare Reasoning-Tiefe fuer Ausnahmefaelle hoechster Komplexitaet.
+- `none`: no additional reasoning work for direct, latency-sensitive tasks;
+- `low`: efficient reasoning for simple planning, search, and tool use;
+- `medium`: balanced reasoning for substantial work with several coordinated steps;
+- `high`: deeper reasoning for difficult debugging, planning, and complex tradeoffs;
+- `xhigh`: very deep reasoning for especially demanding, long-running, or high-risk tasks;
+- `max`: the greatest available reasoning depth for exceptional cases of the highest complexity.
 
-Eine gueltige Antwort waehlt immer `argmax(probabilities)`. Bei exakt gleichen Wahrscheinlichkeiten gewinnt die niedrigere Reasoning-Stufe, also der fruehere Eintrag im Katalog. Es gibt keinen Confidence-Schwellwert und keinen Low-Confidence-Fallback. `confidence` kann in der normalisierten Entscheidung als sichere Metadaten erhalten bleiben, beeinflusst die Auswahl aber nicht. `score` muss endlich sein und im Bereich `0..(criteria.length-1)` liegen, wird aber nicht aus den Wahrscheinlichkeiten zurueckgerechnet: TypeSafe darf `score` und `probabilities` unabhaengig runden, und die Auswahl verwendet ausschliesslich die validierten Wahrscheinlichkeiten. Die Legend muss exakt die Indexschluessel des Katalogs und pro Eintrag die typisierte Level-Form (`profile`, `boundaries`, `examples` sowie nur String-/Stringlisten-Zusatzfelder) besitzen; ihre Texte muessen die gesendeten Kriterien nicht serialisierungsidentisch wiederholen.
+A valid response always selects `argmax(probabilities)`. If probabilities are exactly equal, the lower reasoning level wins, meaning the earlier entry in the catalog. There is no confidence threshold or low-confidence fallback. `confidence` may remain in the normalized decision as safe metadata, but it does not affect selection. `score` must be finite and within `0..(criteria.length-1)`, but it is not recalculated from the probabilities: TypeSafe may round `score` and `probabilities` independently, and selection uses only the validated probabilities. The legend must contain exactly the catalog's index keys. Each legend value must structurally equal its submitted typed criterion, with JSON object key order ignored.
 
-## Prioritaet, Kontext und Grenzen
+## Priority, context, and limits
 
-- **`typesafe-first`**: Eine kataloggueltige TypeSafe-Score-Auswahl darf eine manuell gesetzte Variante ersetzen. Nur technische Fehler oder eine ungueltige Antwort fuehren zum gueltigen Fallback.
-- **`manual-first`**: Eine explizite, im aktuellen Katalog gueltige manuelle Variante beendet das Routing vor jedem TypeSafe-Aufruf. Ohne gueltige manuelle Variante gilt der normale TypeSafe-Pfad.
-- **`prompt-only`**: Uebertraegt aktuellen Prompt und Modell-ID, aber keine Verlaufsliste.
-- **`recent-messages`**: Ist der Default und erlaubt nur chronologische User-/Assistant-Textnachrichten aus der Session-History. Systemprompts, Reasoning-Parts, Tools, Anhaenge und Metadaten sind ausgeschlossen.
-- Vollstaendige, bekannte Abschnitte ab `## Gortex Session Orientation` bis zur naechsten Level-2-Ueberschrift oder zum Textende werden aus dem aktuellen Prompt und aus jedem historischen User-/Assistant-Text entfernt. Text vor und nach dem Block bleibt erhalten; unvollstaendige oder anders markierte Abschnitte werden nicht heuristisch geloescht. Ein Turn, der exakt nur aus einem solchen Block besteht, bleibt absichtlich routbar: `currentPrompt` wird leer, erlaubter Verlauf kann weiterhin Kontext liefern, und eine tatsaechlich angewandte Auswahl oder ein Fallback wird normal benachrichtigt.
-- `maxChars` wird zuerst auf den bereinigten aktuellen Prompt und dann auf die neuesten erlaubten, ebenfalls bereinigten Nachrichten angewandt. `maxMessages` begrenzt zusaetzlich deren Anzahl.
+- **`typesafe-first`**: A catalog-valid TypeSafe Score selection may replace a manually set variant. Only technical errors or an invalid response lead to the valid fallback.
+- **`manual-first`**: An explicit manual variant that is valid in the current catalog ends routing before any TypeSafe request. Without a valid manual variant, the normal TypeSafe path applies.
+- **`prompt-only`**: Sends the current prompt and model ID, but no history list.
+- **`recent-messages`**: This is the default and permits only chronological user and assistant text messages from the session history. System prompts, reasoning parts, tools, attachments, and metadata are excluded.
+- Complete, recognized sections beginning with `## Gortex Session Orientation` and ending at the next level-2 heading or the end of the text are removed from the current prompt and from every historical user and assistant text. Text before and after the block is preserved; incomplete or differently marked sections are not removed heuristically. A turn containing exactly such a block deliberately remains routable: `currentPrompt` becomes empty, permitted history may still provide context, and an actually applied selection or fallback produces a normal notification.
+- `maxChars` is applied first to the sanitized current prompt and then to the newest permitted messages, which are also sanitized. `maxMessages` additionally limits their count.
 
-`chat.message` erhaelt nach dem OpenCode-Hook-Vertrag nur `providerID` und `modelID`. Es filtert den aktuellen User-Text, startet bei Bedarf die sichere History-Aufbereitung und speichert begrenzte, noch nicht gestartete Routing-Arbeit. Erst das korrelierte `chat.params` liefert das volle Modell: Daraus validiert das Plugin den Runtime-Variantenkatalog und startet damit die Auswahl. Nutzer muessen OpenCodes Modellvarianten daher nicht in `variantsByModel` duplizieren; diese Konfiguration bleibt nur eine optionale explizite Ergaenzung.
+When `agentSelection.enabled=false`, under the variant-only OpenCode hook contract, `chat.message` receives only `providerID` and `modelID`. It filters the current user text, starts safe history preparation when needed, and stores bounded routing work that has not yet started. Only the correlated `chat.params` supplies the full model. The plugin validates the runtime variant catalog from that model and then starts selection with the catalog. Users therefore do not need to duplicate OpenCode's model variants in `variantsByModel`; that configuration remains only an optional explicit extension.
 
-`chat.message` setzt einmalig `deadlineAt = start + timeoutMs`. History-Aufbereitung, TypeSafe-SDK-Warten und `chat.params` teilen dieses eine absolute Budget; es wird nicht pro Phase neu gestartet. Unmittelbar vor dem SDK-Aufruf wird die verbleibende Zeit erneut berechnet, sodass nach Fristablauf kein TypeSafe-Aufruf mehr beginnt. Nach Ablauf, bei fehlendem `chat.params` oder bei einer Modellabweichung wird die vorbereitete Klassifikation nicht gestartet. Spaete Antworten werden nicht auf spaetere Turns uebertragen.
+`chat.message` sets `deadlineAt = start + timeoutMs` once. History preparation, waiting for the TypeSafe SDK, and `chat.params` share this single absolute budget; it is not restarted for each phase. The remaining time is recalculated immediately before the SDK request, so no TypeSafe request starts after the deadline. If the deadline expires, `chat.params` is missing, or the model differs, the prepared classification is not started. Late responses are not transferred to later turns.
 
-Der Store ist pro Prozess auf 256 Eintraege begrenzt und verwendet mindestens 30 Sekunden TTL beziehungsweise das Doppelte von `timeoutMs`, falls das groesser ist. Ein aktiver, den Prozess nicht festhaltender Timer entfernt und storniert jeden Eintrag auch dann, wenn danach keine Store-Operation erfolgt; Kapazitaetsverdraengung, Session-Loeschung und Plugin-Dispose tun dasselbe und entfernen ihre Timer. Wiederholte oder parallele `chat.params`-Aufrufe greifen bis dahin nicht-destruktiv auf dieselbe laufende oder abgeschlossene Entscheidung zu. Provider-Optionen werden bei jedem Aufruf idempotent angewandt; sichere Diagnose-, Benachrichtigungs- und TUI-Nebenwirkungen werden pro Message-ID atomar genau einmal beansprucht.
+The store is limited to 256 entries per process and uses a TTL of at least 30 seconds, or twice `timeoutMs` if that is greater. An active timer that does not keep the process alive removes and cancels every entry even if no subsequent store operation occurs; capacity eviction, session deletion, and plugin disposal do the same and remove their timers. Until then, repeated or parallel `chat.params` calls access the same in-progress or completed decision non-destructively. Provider options are applied idempotently on every call; bounded claim state prevents duplicate diagnostic, notification, and TUI side effects for a message ID.
 
-## Sichtbare OpenCode-TUI-Variante
+## Visible OpenCode TUI variant in variant-only mode
 
-Nachdem die tatsaechlich ausgewaehlte, unter `manual-first` beibehaltene oder als gueltiger Fallback angewandte Variante in `output.options` uebernommen wurde, versucht das Plugin fuer OpenCode 1.18.31 die sichtbare TUI-Variante best effort nachzufuehren. Es verwendet den SDK-Endpunkt `client.tui.publish` und publiziert exakt dieses direkte TUI-Kommandoereignis:
+When `agentSelection.enabled=false`, after the actually selected, retained under `manual-first`, or valid fallback variant has been applied to `output.options`, the plugin makes a best-effort attempt to synchronize the visible TUI variant in OpenCode 1.18.31. It uses the `client.tui.publish` SDK endpoint and publishes exactly this direct TUI command event:
 
 ```json
 {
@@ -110,67 +186,76 @@ Nachdem die tatsaechlich ausgewaehlte, unter `manual-first` beibehaltene oder al
 }
 ```
 
-Der Legacy-Endpunkt `/tui/execute-command` beziehungsweise `client.tui.executeCommand` ist dafuer ungeeignet: OpenCode 1.18.31 bildet dessen Payload durch eine alte `commandAliases`-Tabelle ab, in der `variant.cycle` fehlt. Der unbekannte Name wird dadurch als `undefined` dispatcht, waehrend der Endpunkt dennoch erfolgreich `true` melden kann. Ein Fallback auf diesen bekannten False-Positive-No-op findet deshalb nicht statt. Der Katalog fuer Provider-Routing bleibt die Zusammenfuehrung aus Runtime- und explizit konfigurierten Varianten. Fuer die sichtbare TUI verwendet die Queue dagegen nur die Namen aus dem Runtime-Modell, weil nur diese reale Positionen von `variant.cycle` sind. Wird eine konfigurierte, aber nicht im Runtime-Katalog enthaltene Variante angewandt, bleiben deren Provider-Optionen wirksam und die TUI-Synchronisierung wird uebersprungen. Entspricht die beobachtete sichtbare Variante bereits der Zielvariante, ist der Sync ein No-op. Als `skipped` entschiedene oder vollstaendig umgangene Arbeit wird verworfen und nicht synchronisiert.
+The legacy `/tui/execute-command` endpoint and `client.tui.executeCommand` are unsuitable for this purpose: OpenCode 1.18.31 maps their payload through an old `commandAliases` table that does not contain `variant.cycle`. The unknown name is therefore dispatched as `undefined`, while the endpoint may still report a successful `true`. For this reason, the plugin does not fall back to this known false-positive no-op. The catalog used for provider routing remains the merge of runtime and explicitly configured variants. In contrast, the queue uses only names from the runtime model for the visible TUI because only those names have real `variant.cycle` positions. If an applied configured variant is absent from the runtime catalog, its provider options remain effective and TUI synchronization is skipped. If the observed visible variant already matches the target variant, synchronization is a no-op. Work classified as `skipped` or bypassed completely is discarded and not synchronized.
 
-Jeder vorbereitete Turn erhaelt bereits bei `chat.message` eine monotone Reihenfolge, die bis zur TUI-Beobachtung und Synchronisierungsanforderung erhalten bleibt. Schliesst ein aelterer Turn erst nach einem neueren ab, wird seine veraltete Beobachtung ignoriert. Die Queue serialisiert Befehle, gibt synchron neu eingetroffener Arbeit einen Microtask-Handoff und verwirft vor dem Versand veraltete Ziele zugunsten der neuesten Beobachtung. Nur eine Publish-Antwort mit `data: true` ohne `error` gilt als erfolgreicher Zyklus. `{ error }`, `data: false`, fehlendes `data` und Exceptions schreiben den spekulativen Variantenstand nicht fort. Trifft waehrend eines laufenden Befehls eine neuere Modell-/Session-Beobachtung ein, ist der Empfaenger des globalen Befehls mehrdeutig: Die Queue invalidiert dann ihre Projektionen und behandelt darauf basierende wartende Arbeit nicht als synchronisiert. Eine spaetere, neue autoritative Beobachtung und Anforderung kann den Sync erneut sicher versuchen. Steht im Headless-Betrieb kein TUI-Publish zur Verfuegung oder schlaegt das Publizieren fehl, bleiben Provider-Routing und angewandte Modelloptionen davon unberuehrt.
+Every prepared turn receives a monotonic order during `chat.message`, which is retained through TUI observation and the synchronization request. If an older turn completes after a newer one, its stale observation is ignored. The queue serializes commands, gives synchronously arriving work a microtask handoff, and discards stale targets in favor of the latest observation before publishing. Only a publish response with `data: true` and no `error` counts as a successful cycle. `{ error }`, `data: false`, missing `data`, and exceptions do not advance speculative variant state. If a newer model or session observation arrives while a command is in flight, the recipient of the global command becomes ambiguous. The queue then invalidates its projections and does not treat queued work based on them as synchronized. A later, new authoritative observation and request can safely retry synchronization. If no TUI publisher is available in headless operation or publishing fails, provider routing and the applied model options remain unaffected.
 
-Diese Sicherungen beseitigen vermeidbare alte Zyklen, koennen aber keine rennbedingungsfreie exakte TUI-Konvergenz ueber Modell-/Session-Wechsel garantieren. OpenCode 1.18.31 stellt nur das globale `variant.cycle` bereit: Es adressiert das bei der TUI-Verarbeitung sichtbare Modell und enthaelt weder Modellidentitaet noch exakten Variantensetter oder Verarbeitungsbestaetigung. Ein Sichtbarkeitswechsel nach der letzten Vorpruefung kann daher unentdeckt bleiben; ohne anschliessende autoritative Beobachtung ist keine sichere Kompensation moeglich. Die sichtbare TUI-Anzeige bleibt in diesem engen Handoff-Fenster best effort, waehrend die bereits gesetzten Provider-Optionen korrekt und davon unabhaengig bleiben.
+These safeguards eliminate avoidable stale cycles but cannot guarantee race-free, exact TUI convergence across model or session changes. OpenCode 1.18.31 provides only the global `variant.cycle`: it addresses the model visible when the TUI processes the command and contains no model identity, exact variant setter, or processing acknowledgment. A visibility change after the final preflight check may therefore go undetected; without a subsequent authoritative observation, safe compensation is impossible. The visible TUI display remains best effort during this narrow handoff window, while the provider options already set remain correct and independent of it.
 
-## Fallbacks, Diagnosen und Benachrichtigungen
+## Fallbacks, diagnostics, and notifications
 
-Eine Score-Antwort wird nur akzeptiert, wenn Wahrscheinlichkeiten, Score, Legend und Confidence vollstaendig und formal gueltig sind und die gewaehlte Variante im erneut validierten aktuellen Katalog liegt. Jede gueltige Antwort verwendet die Argmax-Auswahl ohne Confidence-Gate. Bei einer technischen oder ungueltigen Antwort wird die konfigurierte Fallback-Variante nur dann angewandt, wenn auch sie aktuell gueltig ist; andernfalls bleiben OpenCodes Optionen unveraendert. Der feldweise Merge erhaelt fremde `output.options`.
+A Score response is accepted only if its probabilities, score, legend, and confidence are complete and formally valid, and the selected variant exists in the revalidated current catalog. Every valid response uses argmax selection without a confidence gate. After a technical or invalid response, the configured fallback variant is applied only if it is also currently valid; otherwise, OpenCode's options remain unchanged. The field-by-field merge preserves unrelated `output.options`.
 
-Sichere Diagnosecodes sind:
+Safe diagnostic codes are:
 
 - `missing-api-key`
 - `invalid-response`
-- `pre-request-timeout` wenn das gemeinsame Budget vor Beginn des TypeSafe-Aufrufs ablaeuft
-- `request-timeout` wenn das Budget waehrend des TypeSafe-Aufrufs ablaeuft oder der Server HTTP 408 liefert
+- `pre-request-timeout` when the shared budget expires before the TypeSafe request begins
+- `request-timeout` when the budget expires during the TypeSafe request or the server returns HTTP 408
 - `network-error`
-- `auth-error` fuer HTTP 401/403
-- `rate-limited` fuer HTTP 429
-- `server-error` fuer HTTP 5xx
-- `client-error` fuer sonstige Fehler
+- `auth-error` for HTTP 401/403
+- `rate-limited` for HTTP 429
+- `server-error` for HTTP 5xx
+- `client-error` for other errors
 
-Diagnosen enthalten nur `code`, `modelID`, `status` (`fallback` oder `skipped`) und bei `invalid-response` optional ein sicheres `detail`. Die Details `request`, `type`, `probabilities`, `score`, `confidence`, `legend` und `variant` benennen ausschliesslich die verletzte Invariantengruppe und enthalten keine Antwortwerte. Der Router ruft den injizierbaren `onDiagnostic`-Callback fuer jede technische oder ungueltige Routing-Entscheidung auf; identische sichere Diagnose-Logs werden pro Modell, Code, Detail und Status dedupliziert. Benutzerbenachrichtigungen stammen dagegen ausschliesslich aus `onAppliedVariant`, nachdem `chat.params` die validierten Optionen tatsaechlich uebernommen hat. Der Callback enthaelt nur `modelID`, angewandte `variant`, `status` (`selected`, `manual` oder `fallback`), `reason` und optional dasselbe sichere `detail`. `notify=off` unterdrueckt alle Meldungen, `fallback` meldet nur angewandte Fallbacks und `always` zusaetzlich TypeSafe- und manuelle Auswahlen. Damit entsteht pro korreliertem routbaren Turn mit angewandter Variante genau eine Meldung; ein Deadline-Fallback vor Beginn des TypeSafe-Aufrufs wird als `pre-request-timeout`, ein bereits laufender oder vom SDK gemeldeter Timeout als `request-timeout` klassifiziert, und andere technische Router-Fallbacks behalten ihren Grund. Erfolgreiche Auswahl, manuelle Variante und Fallback erhalten getrennte, lesbare Texte ohne interne Dopplungen wie `selected:selected`. Ein feldbezogener Fehler erscheint beispielsweise als `Using fallback variant "medium" ... because TypeSafe response validation failed (score).` Fehlende oder modellfremde Store-Eintraege erhalten zwar weiterhin nur aktuelle Fallback-Optionen, erzeugen ohne sicher korrelierten routbaren Prompt aber keine Meldung. Keine Meldung enthaelt Prompt, Verlauf, Credential, Fehlerinhalt oder sonstige Rohdaten.
+Diagnostics contain only `code`, `modelID`, `status` (`fallback` or `skipped`), and, for `invalid-response`, an optional safe `detail`. The details `request`, `type`, `probabilities`, `score`, `confidence`, `legend`, and `variant` name only the violated invariant group and contain no response values. The router invokes the injectable `onDiagnostic` callback for every technical or invalid routing decision; identical safe diagnostic logs are deduplicated by model, code, detail, and status. User notifications, by contrast, come only from `onAppliedVariant` after `chat.params` has actually applied the validated options. The callback contains only `modelID`, the applied `variant`, `status` (`selected`, `manual`, or `fallback`), `reason`, and optionally the same safe `detail`. `notify=off` suppresses all messages, `fallback` reports only applied fallbacks, and `always` additionally reports TypeSafe and manual selections. Each correlated routable turn with an applied variant therefore produces exactly one message. A deadline fallback before the TypeSafe request begins is classified as `pre-request-timeout`; a timeout during an active request or reported by the SDK is classified as `request-timeout`; other technical router fallbacks retain their reason. Successful selection, a manual variant, and fallback have separate readable text without internal duplications such as `selected:selected`. For example, a field-related error appears as `Using fallback variant "medium" ... because TypeSafe response validation failed (score).` Missing store entries and entries associated with a different model still receive only current fallback options, but without a safely correlated routable prompt they produce no message. No message contains the prompt, history, credentials, error content, or other raw data.
 
-## Datenschutz und Datenminimierung
+## Privacy and data minimization
 
-Extern uebertragen werden nur der bereinigte und gekuerzte aktuelle Prompt, die Modell-ID und der durch Modus, Rollenfilter, Blockfilter, `maxMessages` und `maxChars` begrenzte Textverlauf. Der dynamische Score enthaelt ausschliesslich den aktuell validierten, geordneten Variantenkatalog und seine Kriterien. Der SDK-Logger ist deaktiviert.
+Agent-routing requests disclose only the sanitized and truncated current prompt; optional user/assistant text history bounded by mode, role, block filtering, `maxMessages`, and `maxChars`; task-fit agent profiles and fixed model premises; and validated ordered runtime catalog names/descriptions. Source agent/model and topology metadata remain local. Variant-only requests disclose the corresponding prompt/history, model ID, and validated catalog criteria. This is bounded disclosure, not secret redaction. The SDK logger is disabled.
 
-Folgende Inhalte duerfen **weder geloggt noch im Decision Store persistiert** werden:
+The following content must **neither be logged nor retained in decision, route, diagnostic, notification, fingerprint, synchronization, or evaluation output**:
 
-- aktueller Prompt;
-- Chat-Verlauf;
-- `TYPESAFE_API_KEY` oder andere Credentials;
-- TypeSafe-Request-State;
-- TypeSafe-Rohantwort einschliesslich ungefilterter Payload;
-- Fehler-Response-Body.
+- current prompt or chat history text;
+- `TYPESAFE_API_KEY`, other credentials, or credential metadata;
+- tool outputs, reasoning parts, attachments, and unrelated metadata;
+- raw TypeSafe request state or raw TypeSafe response;
+- probability vectors and detailed unused Score answers;
+- provider option objects and error response bodies; each error response body is forbidden;
+- raw effective prompts, permissions, tool definitions, or skill definitions used to derive fingerprints.
 
-Die beobachtbare Store-Metadatenoberflaeche behaelt nur Message-, Session- und Modell-ID, `turnOrder` sowie Deadline-/TTL-Zeitpunkte; Timer, Abbruchcontroller, Nebenwirkungs-Claims, Prompt und History sind nicht ueber `inspect()` oder Logs erreichbar. Die interne, pro Message-ID begrenzte Routing-Closure muss Prompt und History-Promise bis Abschluss, Abbruch oder aktiver TTL-Entfernung voruebergehend halten. Session-Loeschung und Dispose abortieren sie sofort. Der AbortSignal wird sowohl bis zum TypeSafe-SDK als auch als derselbe per-Message-Signalwert an OpenCodes `session.messages` transportiert. Session-Loeschung, Dispose und aktive Ablaufbereinigung abortieren damit auch den produktiven History-Request; falls ein Transport Abort dennoch ignoriert, beendet das Plugin sein lokales Warten sicher und verwirft eine eventuell spaeter eintreffende Antwort. Die normalisierte Entscheidung kann Status, Variantennamen, Grundcode, Zeitpunkt, Confidence und validierte Wahrscheinlichkeiten enthalten, aber kein Credential, Request-State, keine Rohantwort und keinen Fehler-Body.
+Allowed bounded operational metadata includes agent/model IDs, variant names, sanitized reason codes, non-reversible fingerprints, generation and turn numbers, uncertainty flags, and latency measurements.
 
-## Deterministische Offline-Evaluation
+The observable store metadata surface retains only the message, session, and model ID, `turnOrder`, and deadline and TTL timestamps. Timers, abort controllers, side-effect claims, the prompt, and history are not accessible through `inspect()` or logs. The internal routing closure, bounded per message ID, must temporarily retain the prompt and history promise until completion, cancellation, or active TTL removal. Session deletion and disposal abort it immediately. The same per-message AbortSignal is passed both to the TypeSafe SDK and to OpenCode's `session.messages`. Session deletion, disposal, and active expiration cleanup therefore also abort the production history request. If a transport nevertheless ignores the abort, the plugin safely stops waiting locally and discards any response that arrives later. A variant-only normalized decision may contain status, variant name, reason code, timestamp, confidence, and validated probabilities, but no credential, request state, raw response, or error body. Agent-routing retained state omits probability vectors and unused Score details.
 
-Das nicht sensible Korpus liegt in [`.opencode/evaluation/corpus.json`](../.opencode/evaluation/corpus.json). Es enthaelt je mindestens zwei gelabelte Beispiele fuer `simple`, `medium`, `complex`, `ambiguous` und `adversarial`. Die Prompts sind synthetisch und enthalten keine realen Nutzer-, Projekt- oder Credential-Daten.
+## Deterministic offline evaluation
 
-Der Harness [`.opencode/evaluation/evaluation-harness.ts`](../.opencode/evaluation/evaluation-harness.ts) verwendet ausschliesslich einen injizierten Fixture-Client. Er wertet deterministisch aus:
+The non-sensitive corpus is stored in [`test/evaluation/corpus.json`](../test/evaluation/corpus.json). It contains at least two labeled examples each for `simple`, `medium`, `complex`, `ambiguous`, and `adversarial`. The prompts are synthetic and contain no real user, project, or credential data.
 
-- Uebereinstimmung von erwarteter und angewandter Variante;
-- Variantenverteilung pro Modell;
-- Fallback-Quote;
-- Quote ungueltiger Score-Antworten und technischer Fallbacks;
-- simulierte p50/p95-Zusatzlatenz;
-- hochwirksame Fehlklassifikationen mit erwarteter und tatsaechlicher Variante.
+The [`test/evaluation/evaluation-harness.ts`](../test/evaluation/evaluation-harness.ts) harness uses only an injected fixture client. It evaluates the following deterministically:
 
-Ausfuehrung:
+- acceptable target-agent selection and selected-model variant appropriateness;
+- agent and model/variant distributions plus confidence calibration;
+- precommit rejection, parameter-binding abort, and provider-failure outcomes;
+- G3 synchronization outcomes and manual-lock precision;
+- deterministic p50/p95 added latency;
+- the existing variant-only agreement, fallback, and invalid-Score metrics.
+
+Run:
 
 ```sh
-npm --prefix .opencode run test:evaluation
-npm --prefix .opencode run test:docs
+npm test
+npm run test:contract
+npm run test:unit
+npm run test:integration
+npm run test:evaluation
+npm run test:docs
+npm run test:privacy
+npm run typecheck
 ```
 
-Der Harness importiert keinen Live-SDK-Client und fuehrt weder TypeSafe- noch OpenAI-Netzwerkaufrufe aus. Fixture-Antworten enthalten nur deterministische Score-, Legend-, Confidence- und Wahrscheinlichkeitswerte; Confidence wird dabei nicht als Gate ausgewertet.
+The harness does not import a live SDK client and makes neither TypeSafe nor OpenAI network requests. Fixture responses contain only deterministic Score, legend, confidence, and probability values; confidence is not evaluated as a gate.
 
-## Separate Freigabegates
+## Separate release gates
 
-Eine **Live-Evaluation gegen TypeSafe ist nicht autorisiert** und benoetigt eine separate spaetere Freigabe wegen externer Datenuebertragung und Kosten. Ebenso sind **Build, Bundle, Packaging und npm-Publishing nicht autorisiert**; eine npm-Veroeffentlichung ist ein eigenes spaeteres Gate. Aus dem Offline-Ergebnis darf keine Publikationsfreigabe abgeleitet werden.
+A **live evaluation against TypeSafe is not authorized** and requires separate future approval because it transmits data externally and incurs costs. **Build, bundle, packaging, and npm publishing are also not authorized**; npm publication is a separate future gate. The offline result does not imply approval to publish.

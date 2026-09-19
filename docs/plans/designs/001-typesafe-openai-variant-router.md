@@ -1,80 +1,80 @@
-# Design: TypeSafe-gesteuerter OpenAI Variant Router
+# Design: TypeSafe-driven OpenAI variant router
 
 - Status: Superseded
-- Superseded by: [TypeSafe Score Routing](../work/002-typesafe-score-routing.md)
+- Superseded by: [TypeSafe primary-agent and variant router](../../typesafe-variant-router.md)
 - Date: 2026-09-17
-- Scope: Lokales OpenCode-Plugin als Vorstufe zu einem spaeteren npm-Paket
+- Scope: Local OpenCode plugin as a precursor to a future npm package
 
-> **Historischer Design-Snapshot — keine aktuelle normative Anleitung.** Dieses Dokument bewahrt die verworfene Choice-/Confidence-Architektur als Designbeleg. Die aktive Implementierung verwendet geordnetes TypeSafe `Score`, `argmax(probabilities)` ohne Confidence-Schwellwert, bei exaktem Gleichstand die niedrigere Katalogposition, Fallbacks nur bei technischen Fehlern oder ungueltigen Antworten sowie eine best-effort Synchronisierung der sichtbaren OpenCode-UI-Variante. Alle folgenden Abschnitte beschreiben ausschliesslich den damaligen, abgeloesten Entwurf; aktuelle normative Vorgaben stehen im [superseding Score-Routing-Plan](../work/002-typesafe-score-routing.md) und im operativen [Runbook](../../typesafe-variant-router.md).
+> **Historical design snapshot - not current normative guidance.** This document preserves the rejected Choice/confidence architecture as design evidence. The active implementation uses ordered TypeSafe `Score`, `argmax(probabilities)` without a confidence threshold, the lower catalog position for exact ties, fallbacks only for technical errors or invalid responses, and best-effort synchronization of the variant shown in the OpenCode UI. All following sections describe only the former, superseded design. Current normative requirements are in the [TypeSafe primary-agent and variant router](../../typesafe-variant-router.md) operational runbook.
 >
-> Der angrenzende, von Archify erzeugte HTML/JSON-Snapshot bleibt absichtlich unveraendert: Er ist Teil dieses historischen Entwurfsbelegs und keine aktuelle Implementierungsdokumentation.
+> The adjacent Archify-generated HTML/JSON snapshot intentionally remains unchanged. It is part of the historical design record, not current implementation documentation.
 
 ## Problem
 
-OpenCode-Nutzer waehlen die Denkvariante eines OpenAI-Modells heute manuell. Das Plugin soll vor jedem echten User-Prompt TypeSafe AI einsetzen, um aus den fuer das aktuelle Modell verfuegbaren Reasoning-Varianten die passende Variante zu waehlen. Erst danach darf der OpenAI-Request mit den zugehoerigen Provider-Optionen fortgesetzt werden.
+OpenCode users currently select the reasoning variant of an OpenAI model manually. Before each genuine user prompt, the plugin should use TypeSafe AI to select the appropriate variant from the reasoning variants available for the current model. Only then may the OpenAI request proceed with the corresponding provider options.
 
-## Ziele
+## Goals
 
-- Alle verifizierten Reasoning-Varianten des aktuellen Modells unter dem Provider `openai` beruecksichtigen.
-- Standardmaessig aktuellen Prompt plus begrenzten Chat-Kontext bewerten.
-- TypeSafe-Auswahl und manuelle Auswahl konfigurierbar priorisieren; Standard ist `typesafe-first`.
-- Bei Fehlern, Timeout oder niedriger Confidence eine konfigurierte Standardvariante verwenden.
-- Lokal testbar bleiben und ohne Architekturwechsel als npm-Plugin veroeffentlicht werden koennen.
+- Consider all verified reasoning variants of the current model under the `openai` provider.
+- Evaluate the current prompt plus a limited amount of chat context by default.
+- Make the priority between TypeSafe selection and manual selection configurable; the default is `typesafe-first`.
+- Use a configured default variant on errors, timeouts, or low confidence.
+- Remain locally testable and support publication as an npm plugin without an architectural change.
 
-## Nicht-Ziele
+## Non-goals
 
-- Andere Provider oder OpenAI-Modelle ueber OpenCode Zen unterstuetzen.
-- Varianten ohne verifizierte Reasoning-Semantik automatisch auswaehlen.
-- Prompts umschreiben, erneut absenden oder OpenCodes Session-Lifecycle ersetzen.
-- Schwellenwerte ohne ein gelabeltes Evaluationskorpus als endgueltig behandeln.
-- Implementierungsaufgaben oder Code in diesem Dokument festlegen.
+- Support other providers or OpenAI models through OpenCode Zen.
+- Automatically select variants without verified reasoning semantics.
+- Rewrite or resubmit prompts, or replace OpenCode's session lifecycle.
+- Treat thresholds as final without a labeled evaluation corpus.
+- Define implementation tasks or code in this document.
 
-## Constraints und Qualitaetsattribute
+## Constraints and quality attributes
 
-- `TYPESAFE_API_KEY` kommt ausschliesslich aus der Prozessumgebung.
-- Der Prompt-Pfad braucht ein hartes Gesamt-Latenzbudget und einen fail-open Fallback.
-- Die Auswahl darf niemals eine vom Modell nicht unterstuetzte Variante erzeugen.
-- Prompt, Verlauf, API-Key und TypeSafe-Rohantworten duerfen nicht geloggt werden.
-- Mehrere parallele Prompts derselben Session muessen strikt getrennt bleiben.
-- Die Integration soll gegen OpenCode-SDK-Drift isoliert sein.
+- `TYPESAFE_API_KEY` comes exclusively from the process environment.
+- The prompt path needs a hard total latency budget and a fail-open fallback.
+- Selection must never produce a variant that the model does not support.
+- The prompt, history, API key, and raw TypeSafe responses must not be logged.
+- Multiple concurrent prompts in the same session must remain strictly isolated.
+- The integration should be isolated from OpenCode SDK drift.
 
-## Bestehender Kontext
+## Existing context
 
-Das Repository enthaelt bereits ein Prompt-Extraktionsmuster in `.opencode/plugins/oma/oma.ts::extractPromptText` und einen Guard fuer echte User-Prompts in `.opencode/plugins/oma/keyword-detector.ts::isGenuineUserPrompt`. Das neue Plugin bleibt davon entkoppelt und uebernimmt nur die bewaehrten Konzepte. Die installierte OpenCode-Plugin-Version ist `1.18.31`. Deren Hook-Vertrag bietet `chat.message` mit Text-Parts sowie `chat.params` zum Veraendern der finalen Provider-Optionen. Das neuere SDK-Modell kennt `model.variants`; die aktuelle Plugin-Typoberflaeche kann dieses Feld jedoch unvollstaendig abbilden. Deshalb kapselt ein Adapter die Laufzeitvalidierung.
+The repository already contains a prompt extraction pattern in `.opencode/plugins/oma/oma.ts::extractPromptText` and a guard for genuine user prompts in `.opencode/plugins/oma/keyword-detector.ts::isGenuineUserPrompt`. The new plugin remains decoupled from that code and adopts only the proven concepts. The installed OpenCode plugin version is `1.18.31`. Its hook contract provides `chat.message` with text parts and `chat.params` for modifying the final provider options. The newer SDK model includes `model.variants`, but the current plugin type surface may represent this field incompletely. An adapter therefore encapsulates runtime validation.
 
-## Betrachtete Ansaetze
+## Approaches considered
 
-### A. Zweiphasige Hook-Pipeline (gewaehlt, structural)
+### A. Two-phase hook pipeline (selected, structural)
 
-`chat.message` erfasst Prompt und Kontext und startet die TypeSafe-Entscheidung. `chat.params` konsumiert das korrelierte Ergebnis und wendet die Variant-Optionen an. Dies vermeidet Doppelversand und startet die externe Bewertung frueh.
+`chat.message` captures the prompt and context and starts the TypeSafe decision. `chat.params` consumes the correlated result and applies the variant options. This avoids duplicate submissions and starts the external evaluation early.
 
-### B. Nur `chat.params` (structural)
+### B. `chat.params` only (structural)
 
-Ein einzelner Hook laedt Nachricht und Verlauf, ruft TypeSafe auf und setzt Optionen. Der Zustand ist einfacher, aber History-Fetch und Klassifikation liegen vollstaendig im kritischen Request-Pfad.
+A single hook loads the message and history, calls TypeSafe, and sets the options. State management is simpler, but history fetching and classification both remain entirely in the critical request path.
 
-### C. Prompt abfangen und neu absenden (tactical)
+### C. Intercept and resubmit the prompt (tactical)
 
-Der Prompt wird nach der Klassifikation ueber `client.session.prompt` erneut gesendet. Dieser Ansatz wurde wegen Rekursion, Doppelversand, fehlerhafter Reihenfolge und schlechter Plugin-Kompatibilitaet verworfen.
+After classification, the prompt is resubmitted through `client.session.prompt`. This approach was rejected because of recursion, duplicate submissions, incorrect ordering, and poor plugin compatibility.
 
-| Kriterium | A | B | C |
+| Criterion | A | B | C |
 |---|---|---|---|
-| Hook-Vertrag | gut passend | passend | fragil |
-| Promptzugriff | direkt | zusaetzlicher Fetch | direkt |
-| Kritische Latenz | TypeSafe frueh gestartet | TypeSafe plus Fetch | TypeSafe plus Neuversand |
-| Zustandskomplexitaet | mittel | niedrig | hoch |
-| Doppelversandrisiko | niedrig | niedrig | hoch |
-| Testbarkeit | hoch | hoch | mittel |
-| Zukunftsfaehigkeit | hoch | mittel-hoch | niedrig |
+| Hook contract | good fit | suitable | fragile |
+| Prompt access | direct | additional fetch | direct |
+| Critical latency | TypeSafe starts early | TypeSafe plus fetch | TypeSafe plus resubmission |
+| State complexity | medium | low | high |
+| Duplicate-submission risk | low | low | high |
+| Testability | high | high | medium |
+| Future viability | high | medium-high | low |
 
-## Entscheidung
+## Decision
 
-Ansatz A wird umgesetzt. Ein eigenstaendiges Plugin registriert eine zweiphasige Pipeline und isoliert OpenCode-, TypeSafe- und Policy-Details hinter kleinen Vertraegen.
+Approach A will be implemented. A standalone plugin registers a two-phase pipeline and isolates OpenCode, TypeSafe, and policy details behind small contracts.
 
-## Architektur
+## Architecture
 
 ```mermaid
 sequenceDiagram
-  participant U as Nutzer
+  participant U as User
   participant OC as OpenCode
   participant MI as Message Intake
   participant CA as Context Assembler
@@ -84,196 +84,196 @@ sequenceDiagram
   participant PA as Params Applier
   participant OA as OpenAI
 
-  U->>OC: Prompt absenden
+  U->>OC: Submit prompt
   OC->>MI: chat.message
-  MI->>VC: Reasoning-Varianten fuer openai/model
-  MI->>CA: Prompt und begrenzten Verlauf bilden
-  CA->>TS: State und dynamische Choice
-  TS-->>DS: Auswahl, Confidence, Wahrscheinlichkeiten
+  MI->>VC: Reasoning variants for openai/model
+  MI->>CA: Build prompt and limited history
+  CA->>TS: State and dynamic Choice
+  TS-->>DS: Selection, confidence, probabilities
   OC->>PA: chat.params
-  PA->>DS: Entscheidung per Message-ID
-  alt gueltige sichere Entscheidung
-    PA->>OA: Request mit gewaehlten Variant-Optionen
-  else Fehler, Timeout oder geringe Confidence
-    PA->>OA: Request mit Fallback-Variante
+  PA->>DS: Decision by message ID
+  alt valid, safe decision
+    PA->>OA: Request with selected variant options
+  else error, timeout, or low confidence
+    PA->>OA: Request with fallback variant
   end
 ```
 
-Historischer, generierter Snapshot: [001-typesafe-openai-variant-router.archify.html](./001-typesafe-openai-variant-router.archify.html)
+Historical generated snapshot: [001-typesafe-openai-variant-router.archify.html](./001-typesafe-openai-variant-router.archify.html)
 
-## Komponenten
+## Components
 
-### Plugin Entry
+### Plugin entry
 
-Validiert Optionen, erstellt genau einen TypeSafe-Client und registriert Hooks. Unbekannte Konfigurationsfelder sind Fehler. Fehlt der API-Key, bleibt das Plugin betriebsfaehig und nutzt den Fallback.
+Validates options, creates exactly one TypeSafe client, and registers hooks. Unknown configuration fields are errors. If the API key is missing, the plugin remains operational and uses the fallback.
 
-### Message Intake
+### Message intake
 
-Verarbeitet nur echte User-Nachrichten fuer `providerID === "openai"`. Die stabile Producer-ID ist `output.message.id`; die optionale Input-ID wird nicht als Schluessel verwendet. Text-Parts werden zusammengefuehrt, ohne Dateien, Tool-Ausgaben oder Systemteile einzubeziehen.
+Processes only genuine user messages where `providerID === "openai"`. The stable producer ID is `output.message.id`; the optional input ID is not used as a key. Text parts are joined without including files, tool output, or system parts.
 
-Der Hook startet ein bereits intern fehlerbehandeltes Promise und kehrt sofort zurueck. Dadurch kann TypeSafe arbeiten, bevor `chat.params` das Ergebnis benoetigt.
+The hook starts a promise whose errors are already handled internally, then returns immediately. This allows TypeSafe to work before `chat.params` needs the result.
 
-### Context Assembler
+### Context assembler
 
-Standard-State:
+Default state:
 
-- `currentPrompt`: aktueller User-Text.
-- `recentMessages`: begrenzte, chronologische User-/Assistant-Textnachrichten.
-- `model`: aktuelle OpenCode-Modell-ID.
+- `currentPrompt`: current user text.
+- `recentMessages`: limited, chronological user and assistant text messages.
+- `model`: current OpenCode model ID.
 
-Reasoning-Parts, Tool-Ausgaben, Systemprompts, Anhaenge und Metadaten werden ausgeschlossen. `maxMessages` und `maxChars` sind harte Grenzen. `prompt-only` bleibt als datensparsame Option verfuegbar.
+Reasoning parts, tool output, system prompts, attachments, and metadata are excluded. `maxMessages` and `maxChars` are hard limits. `prompt-only` remains available as a data-minimizing option.
 
-### OpenCode Variant Adapter
+### OpenCode variant adapter
 
-Der Adapter ist die Anti-Corruption-Layer zur OpenCode-SDK-Oberflaeche:
+The adapter is the anti-corruption layer for the OpenCode SDK surface:
 
-1. Laufzeitfeld `model.variants` defensiv als Map validieren, wenn vorhanden.
-2. Explizit konfigurierte Modellvarianten als kontrollierten Fallback einbeziehen.
-3. `disabled`-Varianten entfernen.
-4. Nur Varianten mit verifizierter Reasoning-Semantik zulassen.
-5. Nach der Auswahl ausschliesslich die validierten Variant-Optionen in `output.options` mergen.
+1. Defensively validate the runtime field `model.variants` as a map when present.
+2. Include explicitly configured model variants as a controlled fallback.
+3. Remove `disabled` variants.
+4. Allow only variants with verified reasoning semantics.
+5. After selection, merge only the validated variant options into `output.options`.
 
-Ohne verifizierbaren Katalog findet kein TypeSafe-Routing statt; OpenCodes bestehende Variante oder der gueltige Fallback bleibt erhalten. Variantennamen werden niemals direkt in vermutete Provider-Optionen uebersetzt.
+Without a verifiable catalog, TypeSafe routing does not occur; OpenCode's existing variant or the valid fallback remains in place. Variant names are never translated directly into assumed provider options.
 
-### TypeSafe Router
+### TypeSafe router
 
-TypeSafe erhaelt eine dynamische `Choice` ueber genau die zugelassenen Varianten. Kriterien beschreiben konkrete Aufgabenprofile, Abgrenzungen und Beispiele; reine Namen wie `low` oder `xhigh` reichen nicht. Die Antwort wird nur akzeptiert, wenn Choice im aktuellen Katalog liegt und `confidence >= confidenceThreshold` gilt.
+TypeSafe receives a dynamic `Choice` containing exactly the allowed variants. Criteria describe concrete task profiles, distinctions, and examples; bare names such as `low` or `xhigh` are insufficient. A response is accepted only if the Choice is in the current catalog and `confidence >= confidenceThreshold`.
 
-Ein `Score` wurde verworfen, weil benutzerdefinierte Varianten nicht zwingend eine reine lineare Skala bilden. TypeSafe liefert die semantische Auswahl; deterministic code besitzt Kandidatenmenge, Schwellenwert, Fallback und Ausfuehrung.
+A `Score` was rejected because custom variants do not necessarily form a purely linear scale. TypeSafe provides the semantic selection; deterministic code owns the candidate set, threshold, fallback, and execution.
 
-### Decision Store
+### Decision store
 
-Kurzlebiger, pro Prozess gefuehrter Store mit `messageID` als Primaerschluessel. Er speichert Promise oder Ergebnis, aber keinen Prompttext. TTL, Maximalgroesse und Cleanup bei Verbrauch beziehungsweise Session-Ende begrenzen Speicher und verhindern veraltete Entscheidungen.
+A short-lived, per-process store uses `messageID` as its primary key. It stores a promise or result, but no prompt text. A TTL, maximum size, and cleanup upon consumption or session end constrain memory use and prevent stale decisions.
 
-Interner Ergebnisvertrag:
+Internal result contract:
 
 - `status`: `selected | fallback | skipped`
 - `messageID`, `modelID`, `variant`, `reason`, `createdAt`
-- optional `confidence` und `probabilities`
+- optional `confidence` and `probabilities`
 
-### Params Applier
+### Params applier
 
-`chat.params` verwendet `input.message.id` als Consumer-Key. Das Ergebnis wird nur angewandt, wenn Provider, Modell und Variantenkatalog noch zur urspruenglichen Entscheidung passen. Der Hook wartet hoechstens bis zu einem absoluten Gesamt-Deadline. Er mergt nur die Variant-relevanten OpenAI-Optionen und ersetzt keine fremden Plugin-Optionen.
+`chat.params` uses `input.message.id` as the consumer key. The result is applied only if the provider, model, and variant catalog still match the original decision. The hook waits no longer than an absolute total deadline. It merges only variant-related OpenAI options and does not replace options from other plugins.
 
-## Konfigurationsvertrag
+## Configuration contract
 
-| Feld | Typ / Werte | Default |
+| Field | Type / values | Default |
 |---|---|---|
 | `enabled` | boolean | `true` |
-| `fallbackVariant` | string | explizit zu konfigurieren |
-| `confidenceThreshold` | number 0..1 | konservativ, vorlaeufig |
-| `timeoutMs` | positive integer | kurzes Gesamtbudget |
+| `fallbackVariant` | string | must be configured explicitly |
+| `confidenceThreshold` | number 0..1 | conservative, provisional |
+| `timeoutMs` | positive integer | short total budget |
 | `manualVariantPolicy` | `typesafe-first | manual-first` | `typesafe-first` |
 | `context.mode` | `prompt-only | recent-messages` | `recent-messages` |
-| `context.maxMessages` | positive integer | klein und begrenzt |
-| `context.maxChars` | positive integer | erforderlich |
-| `variantsByModel` | Modell zu validierten Variantendefinitionen | leer |
-| `variantDescriptions` | Variante zu TypeSafe-Kriterium | eingebaute Beschreibungen |
+| `context.maxMessages` | positive integer | small and bounded |
+| `context.maxChars` | positive integer | required |
+| `variantsByModel` | model to validated variant definitions | empty |
+| `variantDescriptions` | variant to TypeSafe criterion | built-in descriptions |
 | `notify` | `off | fallback | always` | `fallback` |
 | `logLevel` | `error | warn | info | debug` | `warn` |
 
-`fallbackVariant` wird pro Modell validiert. Ist sie ungueltig, bleibt OpenCodes vorhandene Variante unveraendert und das Plugin protokolliert eine deduplizierte Warnung ohne Request-Inhalte.
+`fallbackVariant` is validated per model. If it is invalid, OpenCode's existing variant remains unchanged, and the plugin logs a deduplicated warning without request content.
 
-## Prioritaetsregel
+## Priority rule
 
-- `typesafe-first`: Eine sichere TypeSafe-Auswahl ersetzt auch eine manuelle Variante. Bei Fallback wird die konfigurierte Fallback-Variante verwendet.
-- `manual-first`: Eine explizite manuelle Variante beendet das Routing vor dem TypeSafe-Aufruf. Ohne manuelle Variante gilt der normale TypeSafe-Pfad.
+- `typesafe-first`: A safe TypeSafe selection replaces even a manually selected variant. On fallback, the configured fallback variant is used.
+- `manual-first`: An explicit manual variant ends routing before the TypeSafe call. Without a manual variant, the normal TypeSafe path applies.
 
-## Fehlerstrategie
+## Error strategy
 
-| Fall | Verhalten |
+| Case | Behavior |
 |---|---|
-| Kein API-Key | Kein TypeSafe-Aufruf; gueltiger Fallback; einmalige Warnung |
-| Timeout / Netzwerk / 429 / 5xx | Fallback innerhalb desselben Gesamtbudgets |
-| 401 / 403 | Fallback; deduplizierte Diagnose ohne Credential oder Response-Body |
-| Niedrige Confidence | Fallback unabhaengig vom Top-Choice |
-| Modellwechsel zwischen Hooks | Ergebnis verwerfen; fuer finales Modell fallbacken |
-| Doppelte Hook-Ausfuehrung | Bestehendes Promise wiederverwenden |
-| Fehlende oder abweichende Message-ID | Fallback; Diagnose; keine Session-ID-Korrelation |
-| Abbruch / fehlender Consumer | TTL-Cleanup |
-| Kein Text | OpenCode unveraendert lassen |
-| Ungueltiger Variant-Katalog | Kein TypeSafe-Routing; unveraendert oder gueltiger Fallback |
+| No API key | No TypeSafe call; valid fallback; one-time warning |
+| Timeout / network / 429 / 5xx | Fallback within the same total budget |
+| 401 / 403 | Fallback; deduplicated diagnostic without credentials or response body |
+| Low confidence | Fallback regardless of the top Choice |
+| Model changes between hooks | Discard result; fall back for the final model |
+| Duplicate hook execution | Reuse the existing promise |
+| Missing or mismatched message ID | Fallback; diagnostic; no session ID correlation |
+| Cancellation / missing consumer | TTL cleanup |
+| No text | Leave OpenCode unchanged |
+| Invalid variant catalog | No TypeSafe routing; unchanged or valid fallback |
 
-SDK-Retries und Plugin-Timeout teilen ein absolutes Gesamtbudget. Verspaetete Antworten duerfen keine spaetere Nachricht beeinflussen.
+SDK retries and the plugin timeout share an absolute total budget. Late responses must not affect a later message.
 
-## Datenschutz und Observability
+## Privacy and observability
 
-- Dokumentation weist prominent darauf hin, dass Prompt und standardmaessig begrenzter Verlauf an TypeSafe gesendet werden.
-- Logs enthalten nur Modell-ID, Ergebnisstatus, Variantennamen, Confidence, Latenzklasse und Grundcode.
-- Prompt, Verlauf, API-Key, Request-State, Rohantwort und Fehler-Response-Body sind verboten.
-- `notify=fallback` informiert nur ueber degradierte Entscheidungen; `always` kann fuer den lokalen Test die Auswahl sichtbar machen.
+- Documentation prominently states that the prompt and, by default, a limited history are sent to TypeSafe.
+- Logs contain only the model ID, result status, variant name, confidence, latency class, and reason code.
+- The prompt, history, API key, request state, raw response, and error response body are prohibited.
+- `notify=fallback` reports only degraded decisions; `always` can make the selection visible during local testing.
 
-## Test- und Validierungsstrategie
+## Test and validation strategy
 
-### Vertrags- und Unit-Tests
+### Contract and unit tests
 
-- Konfigurationsvalidierung und Defaults.
-- Prompt- und Kontextfilterung mit harten Grenzen.
-- Variant-Adapter fuer vorhandene, fehlende, deaktivierte und ungueltige Varianten.
-- Confidence-, Timeout-, Fehler- und Prioritaetspolicy.
-- Decision-Store fuer Parallelitaet, TTL, Maximalgroesse und Cleanup.
-- Merge-Semantik, die fremde `output.options` erhaelt.
+- Configuration validation and defaults.
+- Prompt and context filtering with hard limits.
+- Variant adapter behavior for present, missing, disabled, and invalid variants.
+- Confidence, timeout, error, and priority policy.
+- Decision store behavior for concurrency, TTL, maximum size, and cleanup.
+- Merge semantics that preserve unrelated `output.options`.
 
-### OpenCode-Integrationstest
+### OpenCode integration test
 
-Ein lokaler Test mit echtem OpenCode muss vor Implementierungsfreigabe beweisen:
+Before implementation is approved, a local test with a real OpenCode instance must prove:
 
-1. `chat.message` laeuft vor `chat.params`.
-2. `output.message.id` und `input.message.id` stimmen fuer denselben Turn ueberein.
-3. Der Laufzeitkatalog exponiert die erwarteten Modellvarianten oder die explizite Konfiguration greift.
-4. Die gemergte OpenAI-Option ist im finalen Provider-Request wirksam.
-5. Nicht-`openai`-Provider erzeugen null TypeSafe-Aufrufe.
+1. `chat.message` runs before `chat.params`.
+2. `output.message.id` and `input.message.id` match for the same turn.
+3. The runtime catalog exposes the expected model variants, or the explicit configuration takes effect.
+4. The merged OpenAI option takes effect in the final provider request.
+5. Non-`openai` providers cause zero TypeSafe calls.
 
-### Evaluationskorpus
+### Evaluation corpus
 
-Ein gelabeltes Korpus aus einfachen, mittleren, komplexen, mehrdeutigen und adversarial Prompts misst:
+A labeled corpus of simple, medium, complex, ambiguous, and adversarial prompts measures:
 
-- Uebereinstimmung mit menschlicher Variantenauswahl.
-- Variantenverteilung pro Modell.
-- Fallback- und Low-Confidence-Quote.
-- p50/p95-Zusatzlatenz.
-- Fehlklassifikationen mit hohem Kosten- oder Qualitaetseffekt.
+- Agreement with human variant selection.
+- Variant distribution per model.
+- Fallback and low-confidence rates.
+- p50/p95 added latency.
+- Misclassifications with a high cost or quality impact.
 
-Erst danach werden Confidence-Schwelle und Kriterien fuer eine Veroeffentlichung festgeschrieben.
+Only then will the confidence threshold and criteria be finalized for publication.
 
-## Fitness Functions
+## Fitness functions
 
-- Typcheck gegen die gepinnte `@opencode-ai/plugin`-Version.
-- Vertragstest scheitert, wenn der Runtime-Variant-Katalog nicht mehr validierbar ist.
-- Test scheitert, wenn ein Nicht-OpenAI-Turn TypeSafe aufruft.
-- Test scheitert, wenn Logs verbotene State-Felder enthalten.
-- Test scheitert, wenn parallele Message-IDs Entscheidungen vertauschen.
+- Type-check against the pinned `@opencode-ai/plugin` version.
+- A contract test fails if the runtime variant catalog can no longer be validated.
+- A test fails if a non-OpenAI turn calls TypeSafe.
+- A test fails if logs contain prohibited state fields.
+- A test fails if concurrent message IDs swap decisions.
 
-## Risiken und Gegenmassnahmen
+## Risks and mitigations
 
-- **OpenCode-SDK-Drift:** Adapter, Runtime-Schema-Guard und gepinnte Vertragstests.
-- **Fehlklassifikation:** konservative Confidence-Grenze, Fallback und Evaluationskorpus.
-- **Latenz:** frueher Promise-Start, absolutes Budget, begrenzter Kontext.
-- **Kosten:** eine TypeSafe-Choice pro relevantem Turn; Metriken vor Veroeffentlichung.
-- **Datenschutz:** explizite Dokumentation, minimierbarer Kontext und logfreie Inhalte.
-- **Plugin-Konflikte:** feldweises Options-Merge statt Ersetzung.
+- **OpenCode SDK drift:** Adapter, runtime schema guard, and pinned contract tests.
+- **Misclassification:** Conservative confidence threshold, fallback, and evaluation corpus.
+- **Latency:** Early promise start, absolute budget, and limited context.
+- **Cost:** One TypeSafe Choice per relevant turn; metrics before publication.
+- **Privacy:** Explicit documentation, reducible context, and no content in logs.
+- **Plugin conflicts:** Field-by-field option merge instead of replacement.
 
-## Blind Review
+## Blind review
 
-Unabhaengige Linsen fuer OpenCode, TypeSafe, Security/Privacy, Reliability, QA und Endnutzer fanden drei Tier-1-Luecken: ungesicherte Variantenaufloesung, optionale Input-Message-ID und moegliche doppelte Serialisierung. Sie wurden durch den `OpenCodeVariantAdapter`, stabile Producer-/Consumer-IDs und den nicht blockierenden Producer geschlossen. Tier-2-Punkte zu Kontextfreigabe, Confidence-Kalibrierung, Sichtbarkeit und Custom-Varianten sind in das Design beziehungsweise die Veroeffentlichungsgates aufgenommen. Prompt-Caching wurde als Tier 3 fuer v1 verworfen.
+Independent OpenCode, TypeSafe, security/privacy, reliability, QA, and end-user review perspectives identified three Tier 1 gaps: unsecured variant resolution, an optional input message ID, and possible duplicate serialization. The `OpenCodeVariantAdapter`, stable producer and consumer IDs, and the non-blocking producer closed these gaps. Tier 2 items covering context disclosure, confidence calibration, visibility, and custom variants were incorporated into the design or the publication gates. Prompt caching was rejected as Tier 3 for v1.
 
-## Annahmen
+## Assumptions
 
-- OpenCode ruft Plugin-Hooks fuer einen Turn in der dokumentierten Reihenfolge auf; der Integrationstest muss dies bestaetigen.
-- `chat.params.output.options` ist der unterstuetzte Ort fuer OpenAI-Provider-Optionen.
-- Das Laufzeitmodell kann Varianten enthalten, obwohl aeltere Typoberflaechen dies nicht vollstaendig ausdruecken.
-- Der lokale Prototyp darf eine explizite Variantenkonfiguration nutzen, falls eingebaute Varianten nicht exponiert werden.
+- OpenCode invokes plugin hooks for a turn in the documented order; the integration test must confirm this.
+- `chat.params.output.options` is the supported location for OpenAI provider options.
+- The runtime model may contain variants even if older type surfaces do not represent them fully.
+- The local prototype may use explicit variant configuration if built-in variants are not exposed.
 
-## Quellen
+## Sources
 
-- OpenCode Plugins: https://opencode.ai/docs/plugins/
-- OpenCode Models und Varianten: https://opencode.ai/docs/models/
-- `@opencode-ai/plugin` 1.18.31 Typvertrag
+- OpenCode plugins: https://opencode.ai/docs/plugins/
+- OpenCode models and variants: https://opencode.ai/docs/models/
+- `@opencode-ai/plugin` 1.18.31 type contract
 - TypeSafe Choice: https://docs.typesafe.ai/primitives/choice
 - TypeSafe Confidence: https://docs.typesafe.ai/confidence
 - TypeSafe JavaScript SDK: https://docs.typesafe.ai/sdk/javascript
 - TypeSafe State: https://docs.typesafe.ai/concepts/state
 
-## Uebergang zur Planung
+## Transition to planning
 
-Das Design erlaubt als naechsten Schritt eine Aufgabenzerlegung. Implementierung beginnt erst nach einem erfolgreichen OpenCode-Vertrags-Spike fuer Hook-Reihenfolge, Message-ID und Variantenkatalog.
+The design permits task decomposition as the next step. Implementation begins only after a successful OpenCode contract spike covering hook order, message ID, and the variant catalog.

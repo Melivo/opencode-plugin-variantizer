@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "openCodeVersion": "1.18.31",
+  "gate": "G1",
+  "outcome": "PASS",
+  "invariants": {
+    "authoritativeSourceAgentModel": true,
+    "ordinaryWritableTupleProperties": true,
+    "synchronousCompleteTupleBeforeBinding": true,
+    "sameCompositeTupleAtChatParams": true,
+    "overlappingSessionsAndTurnsCorrelate": true,
+    "deterministicRetriesAndCardinality": true,
+    "providerAbortOnMismatch": true,
+    "targetOnlyOptions": true,
+    "sourcePreservedWithoutVariant": true,
+    "oneProviderAttemptNoResend": true
+  },
+  "sourceVariantRequired": false,
+  "historicalDesign002": {
+    "outcome": "BLOCKED",
+    "blocker": "OpenCode 1.18.31 does not expose the authoritative source variant as output.message.variant; the canonical field is output.message.model.variant.",
+    "preservedAsPassingCharacterization": true
+  }
+}

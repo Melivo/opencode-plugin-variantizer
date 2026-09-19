@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "openCodeVersion": "1.18.31",
+  "outcome": "PROVEN",
+  "command": {
+    "eventType": "tui.command.execute",
+    "name": "model.cycle_favorite",
+    "transport": "client.tui.publish",
+    "direction": "forward",
+    "stepsPerExecution": 1
+  },
+  "favoriteOrder": [
+    "openai/gpt-5.6-luna",
+    "openai/gpt-5.6-terra",
+    "openai/gpt-5.6-sol"
+  ],
+  "invariants": {
+    "directPublishDelivery": true,
+    "exactlyOneFavoriteStep": true,
+    "solToLunaWrap": true,
+    "excludesRecentsAndBroaderLists": true,
+    "exactModelIDMapping": true,
+    "failedPublicationDetectable": true,
+    "ambiguousPublicationDetectable": true
+  },
+  "publishSuccessIsReadback": false,
+  "confirmationContract": "Confirm only from a later authoritative output.message source observation."
+}

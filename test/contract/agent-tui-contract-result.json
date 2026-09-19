@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 1,
+  "openCodeVersion": "1.18.31",
+  "g2": {
+    "outcome": "PASS",
+    "failedInvariants": [],
+    "logicalRing": [
+      "luna",
+      "terra",
+      "sol"
+    ],
+    "expectedObservedPrimaryOrder": [
+      "luna",
+      "sol",
+      "terra"
+    ],
+    "observedVisiblePrimaryOrder": [
+      "luna",
+      "sol",
+      "terra"
+    ],
+    "exactPrimaryMembership": true,
+    "cycleCommand": "agent.cycle.reverse",
+    "observedLogicalCycleAndWrap": [
+      "luna",
+      "terra",
+      "sol",
+      "luna"
+    ],
+    "builtInsDisabled": true,
+    "secondaryAgent": {
+      "name": "scout",
+      "mode": "subagent",
+      "excludedFromCycle": true
+    },
+    "bindings": {
+      "luna": "openai/gpt-5.6-luna",
+      "terra": "openai/gpt-5.6-terra",
+      "sol": "openai/gpt-5.6-sol"
+    },
+    "bindingsStable": true,
+    "canonicalProjectBehavior": {
+      "coveredFields": [
+        "prompt",
+        "permission",
+        "tools",
+        "skills",
+        "temperature",
+        "topP"
+      ],
+      "fingerprints": {
+        "luna": "0c97850b2755fc8ac7e5faa64d65bc2022773239439a021c9ae7a66f6a48c264",
+        "terra": "0c97850b2755fc8ac7e5faa64d65bc2022773239439a021c9ae7a66f6a48c264",
+        "sol": "0c97850b2755fc8ac7e5faa64d65bc2022773239439a021c9ae7a66f6a48c264"
+      },
+      "equal": true,
+      "stable": true
+    },
+    "providerBoundaryBehavior": {
+      "normalizedAllowedDifferences": [
+        "bound-model-identity",
+        "request-specific-prompt-cache-key"
+      ],
+      "boundModelIdentityInjected": {
+        "luna": true,
+        "terra": true,
+        "sol": true
+      },
+      "instructionFingerprints": {
+        "luna": "f2df494e73dc95a55bbaf21ccf7c3b5abb05c99e297ccbe812c4861d42e4ee73",
+        "terra": "f2df494e73dc95a55bbaf21ccf7c3b5abb05c99e297ccbe812c4861d42e4ee73",
+        "sol": "f2df494e73dc95a55bbaf21ccf7c3b5abb05c99e297ccbe812c4861d42e4ee73"
+      },
+      "instructionsEqual": true,
+      "toolSchemaFingerprints": {
+        "luna": "d2fd6b5b101bc9b75c582da1af97206c9f7b8d534dc9e1cabbee43f7a4ac66ec",
+        "terra": "d2fd6b5b101bc9b75c582da1af97206c9f7b8d534dc9e1cabbee43f7a4ac66ec",
+        "sol": "d2fd6b5b101bc9b75c582da1af97206c9f7b8d534dc9e1cabbee43f7a4ac66ec"
+      },
+      "toolSchemasEqual": true,
+      "otherBehaviorFingerprints": {
+        "luna": "c597f02623b65c8d9caf9f7f7aff3536dd28ba1f970206eb175058b40e62e0e2",
+        "terra": "c597f02623b65c8d9caf9f7f7aff3536dd28ba1f970206eb175058b40e62e0e2",
+        "sol": "c597f02623b65c8d9caf9f7f7aff3536dd28ba1f970206eb175058b40e62e0e2"
+      },
+      "otherBehaviorEqual": true
+    },
+    "runtimeListSupplement": {
+      "availableAgentFields": [
+        "color",
+        "description",
+        "hidden",
+        "mode",
+        "model",
+        "name",
+        "native",
+        "options",
+        "permission",
+        "prompt",
+        "steps",
+        "temperature",
+        "topP",
+        "variant"
+      ],
+      "fingerprints": {
+        "luna": "48ea9c109a4bc92222dba40064245a34b6805f92800b41d5648126cee25b42fb",
+        "terra": "48ea9c109a4bc92222dba40064245a34b6805f92800b41d5648126cee25b42fb",
+        "sol": "48ea9c109a4bc92222dba40064245a34b6805f92800b41d5648126cee25b42fb"
+      },
+      "equal": true,
+      "stable": true
+    },
+    "residualHostRisks": [
+      "host-internal-resolved-instructions-tools-and-skills-remain-unobservable-beyond-provider-boundary"
+    ]
+  },
+  "g3": {
+    "outcome": "UNAVAILABLE",
+    "unavailableReasons": [
+      "targetless-publish-payload-has-no-session-identifier",
+      "cross-session-selector-scope-is-not-authoritatively-observable",
+      "command-timeout-delivery-state-is-not-authoritatively-observable"
+    ],
+    "command": {
+      "eventType": "tui.command.execute",
+      "name": "agent.cycle.reverse",
+      "transport": "client.tui.publish",
+      "targetless": true
+    },
+    "directPublishDelivery": true,
+    "activeSessionStable": true,
+    "orderedTwoCommandCompositionObserved": true,
+    "currentTurnAgentMutationPersistsSelector": false,
+    "invalidPayloadRejectionDetectable": true,
+    "ambiguousAcceptedCommandDetectedByLaterSource": true,
+    "nextTurnSourceSupportsIntermediateClassification": true,
+    "nextTurnSourceSupportsRebasing": true,
+    "publishSuccessIsReadback": false,
+    "rejectedPublicationRetried": false,
+    "ambiguousPublicationRetried": false,
+    "timeoutDeliveryCharacterized": false,
+    "timeoutRetryObserved": null,
+    "privateAgentSetterUsed": false,
+    "authoritativeObservationAgents": [
+      "luna",
+      "terra",
+      "sol",
+      "luna",
+      "terra",
+      "luna",
+      "luna",
+      "luna"
+    ]
+  }
+}
