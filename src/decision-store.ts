@@ -201,6 +201,7 @@ export type CommittedAgentRoute = Readonly<{
   targetAgent: RingAgentID;
   targetModel: string;
   targetVariant: string;
+  confidence: number;
   topologyGenerationID: string;
   behaviorFingerprint: string;
   catalogFingerprint: string;
@@ -267,6 +268,9 @@ function validRoute(route: CommittedAgentRoute, sessionID: string, messageID: st
     && route.messageID === messageID
     && Number.isSafeInteger(route.turnOrder)
     && route.turnOrder > 0
+    && Number.isFinite(route.confidence)
+    && route.confidence >= 0
+    && route.confidence <= 1
     && Number.isFinite(route.createdAt)
     && bounded.every((value) => typeof value === "string" && value.length > 0 && value.length <= 512);
 }

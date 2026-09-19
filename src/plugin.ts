@@ -80,6 +80,7 @@ export type AppliedVariant = Readonly<{
   variant: string;
   status: "selected" | "manual" | "fallback";
   reason: RouterReason;
+  confidence?: number;
   detail?: InvalidResponseDetail;
 }>;
 
@@ -161,6 +162,7 @@ type PipelineDependencies = {
   store?: DecisionStore<DeferredRouting>;
   onDiagnostic?: (diagnostic: RouterDiagnostic) => void;
   onRuntimeDiagnostic?: (diagnostic: DiagnosticRecord) => void;
+  onTypeSafeDebug?: (event: Readonly<Record<string, unknown>>) => void;
   clearDiagnostics?: () => void;
   onAppliedVariant?: (application: AppliedVariant) => void;
   onAgentRouteRejected?: (rejection: Readonly<{
@@ -451,6 +453,7 @@ export function createVariantRouterHooks(rawConfig: unknown, dependencies: Pipel
     now,
     setTimer,
     onDiagnostic: reportRouterDiagnostic,
+    onResponse: (response) => dependencies.onTypeSafeDebug?.({ event: "variant-response", response }),
   });
   const agentStore = dependencies.agentStore ?? createAgentRouteStore({
     ttlMs: Math.max(DEFAULT_STORE_TTL_MS, config.timeoutMs * 2),
@@ -476,6 +479,7 @@ export function createVariantRouterHooks(rawConfig: unknown, dependencies: Pipel
       };
       emitRuntime(policies[reason]);
     },
+    onResponse: (response) => dependencies.onTypeSafeDebug?.({ event: "agent-response", response }),
   });
 
   const timeoutPolicy = (operation: "acquire-topology" | "read-history" | "route-request" | "revalidate-topology"): DiagnosticPolicyName => {
@@ -576,6 +580,19 @@ export function createVariantRouterHooks(rawConfig: unknown, dependencies: Pipel
         timeoutMs: remainingMs,
         signal: controller.signal,
       }).finally(() => { routePending = false; });
+      try {
+        dependencies.onTypeSafeDebug?.({
+          event: "agent-decision",
+          sessionID,
+          messageID,
+          sourceAgent,
+          sourceModel,
+          status: decision.status,
+          ...(decision.status === "selected"
+            ? { targetAgent: decision.targetAgent, targetModel: decision.targetModel, targetVariant: decision.targetVariant, confidence: decision.confidence }
+            : { reason: decision.reason }),
+        });
+      } catch { /* debug observers are nonfatal */ }
       if (decision.status !== "selected" || controller.signal.aborted) {
         if (decision.status === "rejected") reportRejection(decision.reason);
         return undefined;
@@ -642,6 +659,7 @@ export function createVariantRouterHooks(rawConfig: unknown, dependencies: Pipel
       targetAgent: decision.targetAgent,
       targetModel: decision.targetModel,
       targetVariant: decision.targetVariant,
+      confidence: decision.confidence,
       topologyGenerationID: decision.topologyGenerationID,
       behaviorFingerprint: decision.behaviorFingerprint,
       catalogFingerprint: decision.catalogFingerprint,
@@ -667,6 +685,9 @@ export function createVariantRouterHooks(rawConfig: unknown, dependencies: Pipel
 
   const runAgentParams = async (input: ParamsInput, output: ParamsOutput): Promise<void> => {
     if (disposed) return;
+    // OpenCode reuses chat.params for its internal title request after the primary turn.
+    // It is not part of the committed agent route and must not invalidate that route.
+    if (input.agent === "title") return;
     const messageID = input.message.id;
     const messageSessionID = input.message.sessionID;
     if (!messageID || !messageSessionID) return;
@@ -737,6 +758,7 @@ export function createVariantRouterHooks(rawConfig: unknown, dependencies: Pipel
           variant: route.targetVariant,
           status: "selected",
           reason: "selected",
+          confidence: route.confidence,
         });
       } catch {
         // Notification observers are nonfatal and cannot affect provider routing.
@@ -941,6 +963,19 @@ export function createVariantRouterHooks(rawConfig: unknown, dependencies: Pipel
           reportRouterDiagnostic(diagnostic);
         }
         if (application) {
+          try {
+            dependencies.onTypeSafeDebug?.({
+              event: "variant-decision",
+              sessionID: entry.sessionID,
+              messageID,
+              modelID: application.modelID,
+              variant: application.variant,
+              status: application.status,
+              reason: application.reason,
+              ...(application.confidence !== undefined ? { confidence: application.confidence } : {}),
+              ...(application.detail ? { detail: application.detail } : {}),
+            });
+          } catch { /* debug observers are nonfatal */ }
           try { dependencies.onAppliedVariant?.(application); } catch { emitRuntime("notificationDeliveryFailed"); }
         }
       };
@@ -1008,6 +1043,7 @@ export function createVariantRouterHooks(rawConfig: unknown, dependencies: Pipel
             variant: result.variant,
             status,
             reason: result.reason,
+            ...(result.confidence !== undefined ? { confidence: result.confidence } : {}),
             ...(result.detail ? { detail: result.detail } : {}),
           },
           paramsTimeoutReason
@@ -1066,7 +1102,12 @@ export function formatAppliedVariantNotification(application: AppliedVariant): {
   const modelID = sanitizeDiagnosticIdentifier(application.modelID, 256);
   const variant = sanitizeDiagnosticIdentifier(application.variant, 128);
   if (application.status === "selected") {
-    return { message: `Selected variant "${variant}" for ${modelID}.`, variant: "info" };
+    const confidence = application.confidence;
+    const confidenceSuffix = typeof confidence === "number" && Number.isFinite(confidence)
+      && confidence >= 0 && confidence <= 1
+      ? ` (routing confidence: ${Math.round(confidence * 100)}%).${confidence < 0.6 ? " Low routing confidence." : ""}`
+      : ".";
+    return { message: `Selected variant "${variant}" for ${modelID}${confidenceSuffix}`, variant: "info" };
   }
   if (application.status === "manual") {
     return { message: `Using manual variant "${variant}" for ${modelID}.`, variant: "info" };
@@ -1109,6 +1150,24 @@ function productionObservers(
   });
   const emit = (diagnostic: DiagnosticRecord): void => {
     if (!closed) void emitter.emit(diagnostic);
+  };
+  const onTypeSafeDebug = (event: Readonly<Record<string, unknown>>): void => {
+    if (closed || config.logLevel !== "debug") return;
+    try {
+      const message = JSON.stringify({
+        schemaVersion: 1,
+        service: "typesafe-variant-router",
+        level: "debug",
+        event,
+      });
+      // OpenCode may filter transport-level debug records from its file log. Keep
+      // the event's semantic level in the JSON payload while using info for delivery.
+      void input.client.app.log({ body: { service: "typesafe-variant-router", level: "info", message } }).catch(() => {
+        // Debug logging is observational and must not create an unhandled rejection.
+      });
+    } catch {
+      emit(createDiagnostic("logDeliveryFailed"));
+    }
   };
   const routerPolicy = (diagnostic: RouterDiagnostic): DiagnosticPolicyName => {
     if (diagnostic.code === "missing-api-key") return "missingApiKey";
@@ -1187,6 +1246,7 @@ function productionObservers(
   };
   return {
     onRuntimeDiagnostic: emit,
+    onTypeSafeDebug,
     onDiagnostic(diagnostic: RouterDiagnostic): void {
       emit(createDiagnostic(routerPolicy(diagnostic), {
         modelID: diagnostic.modelID,

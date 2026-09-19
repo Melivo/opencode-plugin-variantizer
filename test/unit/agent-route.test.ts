@@ -147,7 +147,7 @@ describe("mixed TypeSafe agent route", () => {
       targetAgent: "terra",
       targetModel: AGENT_MODEL_BINDINGS.terra,
       targetVariant: "high",
-      confidence: 0.75,
+      confidence: 0.5,
       topologyGenerationID: snapshot.generationID,
       behaviorFingerprint: snapshot.behaviorFingerprint,
       catalogFingerprint: snapshot.catalogFingerprints.terra,

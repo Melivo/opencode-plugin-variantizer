@@ -232,6 +232,7 @@ describe("bounded decision store", () => {
       targetAgent: "terra",
       targetModel: AGENT_MODEL_BINDINGS.terra,
       targetVariant: "high",
+      confidence: 1,
       topologyGenerationID: "generation",
       behaviorFingerprint: "behavior",
       catalogFingerprint: "catalog",
@@ -280,6 +281,7 @@ describe("bounded decision store", () => {
         targetAgent: "terra",
         targetModel: AGENT_MODEL_BINDINGS.terra,
         targetVariant: "high",
+        confidence: 1,
         topologyGenerationID: "generation",
         behaviorFingerprint: "behavior",
         catalogFingerprint: "catalog",
@@ -306,6 +308,7 @@ describe("bounded decision store", () => {
       targetAgent: "sol",
       targetModel: AGENT_MODEL_BINDINGS.sol,
       targetVariant: "xhigh",
+      confidence: 1,
       topologyGenerationID: "generation",
       behaviorFingerprint: "behavior",
       catalogFingerprint: "catalog",
@@ -397,6 +400,7 @@ describe("two-phase hook pipeline", () => {
       variant: "high",
       status: "selected",
       reason: "selected",
+      confidence: 1,
     }]);
   });
 
@@ -496,6 +500,7 @@ describe("two-phase hook pipeline", () => {
       variant: "high",
       status: "selected",
       reason: "selected",
+      confidence: 1,
     }]);
     expect(cycleCalls).toBe(2);
   });
@@ -566,6 +571,7 @@ describe("two-phase hook pipeline", () => {
       variant: "high",
       status: "selected",
       reason: "selected",
+      confidence: 1,
     }]);
   });
 
@@ -686,6 +692,7 @@ describe("two-phase hook pipeline", () => {
       variant: "high",
       status: "selected",
       reason: "selected",
+      confidence: 1,
     }]);
   });
 
@@ -1156,6 +1163,26 @@ describe("two-phase hook pipeline", () => {
     expect(store.size).toBe(0);
   });
 
+  test("ignores OpenCode's internal title params without invalidating the committed route", async () => {
+    const snapshot = ringTopology();
+    const hooks = createVariantRouterHooks(ringConfig(), {
+      agentClient: { async route(request) { return ringResponse(request, "sol", "high"); } },
+      agentTopology: ringTopologySource(snapshot),
+      now: () => 100,
+    });
+    const output = ringMessageOutput("title-bypass", "luna");
+
+    await hooks["chat.message"]?.(ringMessageInput("session-1", "luna") as never, output as never);
+    const titleInput = { ...ringParamsInput(output.message), agent: "title" };
+    await hooks["chat.params"]?.(titleInput as never, paramsOutput() as never);
+
+    const actualParams = paramsOutput();
+    await hooks["chat.params"]?.(ringParamsInput(output.message) as never, actualParams as never);
+
+    expect(actualParams.options).toEqual({ reasoningEffort: "high" });
+    await hooks.dispose?.();
+  });
+
   test("commits an authoritative mixed agent route and applies only correlated cloned options", async () => {
     const snapshot = ringTopology();
     let calls = 0;
@@ -1192,6 +1219,7 @@ describe("two-phase hook pipeline", () => {
       variant: "high",
       status: "selected",
       reason: "selected",
+      confidence: 1,
     }]);
     bound.options.reasoningEffort = "mutated";
     expect(snapshot.catalogsByAgent.terra.optionsByVariant.high).toEqual({ reasoningEffort: "high" });
@@ -1811,7 +1839,7 @@ describe("two-phase hook pipeline", () => {
     await hooks["chat.params"]?.(paramsInput("sink-health") as never, paramsOutput() as never);
     for (let index = 0; index < 8 && health.length < 2; index += 1) await Promise.resolve();
 
-    expect(logCalls).toBe(2);
+    expect(logCalls).toBe(3);
     expect(health).toEqual([
       { reasonCode: "log-delivery-failed", sinkFailures: 1 },
       { reasonCode: "log-delivery-failed", sinkFailures: 2 },

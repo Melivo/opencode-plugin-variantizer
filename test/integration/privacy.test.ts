@@ -312,7 +312,7 @@ describe("production privacy boundaries", () => {
     expect(toasts).toEqual([{
       body: {
         title: "TypeSafe variant router",
-        message: "Selected variant \"high\" for openai/gpt-5.6-terra.",
+        message: "Selected variant \"high\" for openai/gpt-5.6-terra (routing confidence: 100%).",
         variant: "info",
       },
     }]);
@@ -630,6 +630,44 @@ describe("production privacy boundaries", () => {
     await hooks.dispose?.();
   });
 
+  test("logs raw TypeSafe responses and applied decisions only at debug level", async () => {
+    const logs: unknown[] = [];
+    const rawResponse = {
+      type: markers.rawResponse,
+      score: 0,
+      confidence: 1,
+      legend: { 0: markers.requestState, 1: markers.errorBody },
+      probabilities: { 0: 1, 1: 0 },
+    };
+    const plugin = createTypeSafeVariantRouterPlugin({
+      resolveApiKey: async () => markers.credential,
+      createScoreClient: () => ({ async score() { return rawResponse as never; } }),
+    });
+    const hooks = await plugin({
+      client: {
+        app: { log: async (request: unknown) => { logs.push(request); return {} as never; } },
+        tui: { showToast: async () => ({} as never) },
+        session: { messages: async () => ({ data: [] }) },
+      },
+    } as never, { fallbackVariant: "low", agentSelection: { enabled: false }, notify: "off", logLevel: "debug" });
+
+    await hooks["chat.message"]?.(messageInput() as never, messageOutput("debug-response") as never);
+    await hooks["chat.params"]?.(paramsInput("debug-response") as never, paramsOutput() as never);
+
+    expect(logs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ body: expect.objectContaining({ level: "info" }) }),
+    ]));
+    const debugEvents = logs
+      .map((entry) => (entry as { body?: { message?: string } }).body?.message)
+      .filter((message): message is string => typeof message === "string")
+      .map((message) => JSON.parse(message) as { event?: Record<string, unknown> });
+    expect(debugEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({ event: { event: "variant-response", response: rawResponse } }),
+      expect.objectContaining({ event: expect.objectContaining({ event: "variant-decision", variant: "low", status: "fallback", reason: "invalid-response" }) }),
+    ]));
+    await hooks.dispose?.();
+  });
+
   test("emits exactly one privacy-safe application toast according to each notify mode", async () => {
     const scenarios = [
       { name: "fallback off", notify: "off", manual: false, expected: [] },
@@ -673,6 +711,7 @@ describe("production privacy boundaries", () => {
       variant: "low",
       status: "selected",
       reason: "selected",
+      confidence: 0.59,
     });
     const manual = formatAppliedVariantNotification({
       modelID: "openai/gpt-5.6-sol",
@@ -681,7 +720,7 @@ describe("production privacy boundaries", () => {
       reason: "selected",
     });
     expect(selected).toEqual({
-      message: "Selected variant \"low\" for openai/gpt-5.6-sol.",
+      message: "Selected variant \"low\" for openai/gpt-5.6-sol (routing confidence: 59%). Low routing confidence.",
       variant: "info",
     });
     expect(manual).toEqual({
@@ -817,6 +856,7 @@ describe("production privacy boundaries", () => {
       targetAgent: "terra",
       targetModel: AGENT_MODEL_BINDINGS.terra,
       targetVariant: "high",
+      confidence: 0.9,
       topologyGenerationID: topology.generationID,
       behaviorFingerprint: topology.behaviorFingerprint,
       catalogFingerprint: topology.catalogFingerprints.terra,

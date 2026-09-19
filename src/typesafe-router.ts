@@ -88,6 +88,7 @@ type RouterDependencies = {
   now?: () => number;
   setTimer?: (callback: () => void, delayMs: number) => () => void;
   onDiagnostic?: (diagnostic: RouterDiagnostic) => void;
+  onResponse?: (response: TypeSafeScoreAnswer) => void;
 };
 
 type SettledCall =
@@ -343,6 +344,7 @@ export function createTypeSafeRouter(dependencies: RouterDependencies = {}) {
       if (settled.kind === "deadline") return finish(input, "request-timeout", createdAt);
       if (settled.kind === "error") return finish(input, errorReason(settled.error), createdAt);
 
+      try { dependencies.onResponse?.(settled.answer); } catch { /* debug observers are nonfatal */ }
       const validation = validateTypeSafeScoreAnswer(settled.answer, input.catalog.names);
       if (!validation.valid) {
         return finish(input, "invalid-response", createdAt, validation.detail);

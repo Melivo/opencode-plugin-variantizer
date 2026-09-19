@@ -391,6 +391,7 @@ describe("production hook contract", () => {
       variant: "high",
       status: "selected",
       reason: "selected",
+      confidence: 1,
     }]);
     await hooks.dispose?.();
   });

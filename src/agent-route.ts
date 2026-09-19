@@ -113,6 +113,7 @@ type AgentRouteDependencies = Readonly<{
   client?: TypeSafeAgentRouteClient;
   now?: () => number;
   onTransportFailure?: (reason: AgentRouteTransportFailureReason) => void;
+  onResponse?: (response: unknown) => void;
 }>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -268,7 +269,7 @@ export function buildAgentRouteRequest(input: AgentRouteInput): TypeSafeAgentRou
   });
 }
 
-function validateChoice(value: unknown): RingAgentID | undefined {
+function validateChoice(value: unknown): Readonly<{ agent: RingAgentID; confidence: number }> | undefined {
   if (!hasExactKeys(value, CHOICE_KEYS) || value.type !== "choice" || !finiteUnit(value.confidence)) return undefined;
   const probabilities = validProbabilityMap(value.probabilities, LOGICAL_AGENT_RING);
   if (!probabilities) return undefined;
@@ -276,7 +277,7 @@ function validateChoice(value: unknown): RingAgentID | undefined {
   return typeof value.choice === "string"
     && selected === value.choice
     && LOGICAL_AGENT_RING.includes(value.choice as RingAgentID)
-    ? value.choice as RingAgentID
+    ? Object.freeze({ agent: value.choice as RingAgentID, confidence: value.confidence })
     : undefined;
 }
 
@@ -323,9 +324,9 @@ function composeDecision(
     || !validUsage(response.usage)
     || !hasExactKeys(response.answers, AGENT_ROUTE_QUESTION_IDS)) return undefined;
 
-  const selectedByChoice = validateChoice(response.answers.target_agent);
-  if (!selectedByChoice) return undefined;
-  const selectedAgent = input.manualLock ?? selectedByChoice;
+  const selectedChoice = validateChoice(response.answers.target_agent);
+  if (!selectedChoice) return undefined;
+  const selectedAgent = input.manualLock ?? selectedChoice.agent;
   if (!LOGICAL_AGENT_RING.includes(selectedAgent)) return undefined;
 
   const scores = {
@@ -354,7 +355,7 @@ function composeDecision(
     targetAgent: selectedAgent,
     targetModel,
     targetVariant: selectedScore.variant,
-    confidence: selectedScore.confidence,
+    confidence: selectedChoice.confidence,
     topologyGenerationID: input.topology.generationID,
     behaviorFingerprint: input.topology.behaviorFingerprint,
     catalogFingerprint: input.topology.catalogFingerprints[selectedAgent],
@@ -393,6 +394,7 @@ export function createAgentRouteRouter(dependencies: AgentRouteDependencies = {}
         return rejected(input.signal?.aborted ? "cancelled" : "client-error", createdAt);
       }
       if (input.signal?.aborted) return rejected("cancelled", createdAt);
+      try { dependencies.onResponse?.(response); } catch { /* debug observers are nonfatal */ }
       if (!validateTopologyObservation(input.topology, input.observeCurrentTopology())) {
         return rejected("stale-topology", createdAt);
       }
