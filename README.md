@@ -68,6 +68,18 @@ Copy the files from this repository's `.opencode/agents/luna.md`,
 If the definitions exist only under a project's `.opencode/agents/` directory,
 the agents and routing notifications are visible only in that project.
 
+Disable OpenCode's built-in `plan` and `build` agents in the same global
+configuration so the selector exposes only the routing ring:
+
+```jsonc
+{
+  "agent": {
+    "plan": { "disable": true },
+    "build": { "disable": true }
+  }
+}
+```
+
 Do not load the plugin a second time through a project-local
 `.opencode/plugins/` wrapper when it is already configured globally.
 
