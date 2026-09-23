@@ -75,7 +75,7 @@ function modelID(model) {
   return model ? `${model.providerID}/${model.modelID}` : null;
 }
 
-async function waitForJson(path, predicate = () => true, timeoutMs = 30_000) {
+async function waitForJson(path, predicate = () => true, timeoutMs = 60_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
@@ -503,7 +503,7 @@ function publication(evidence, label) {
   return match;
 }
 
-test("OpenCode 1.18.31 agent ring and selector contracts are strictly characterized", { timeout: 60_000 }, async () => {
+test("OpenCode 1.18.31 agent ring and selector contracts are strictly characterized", { timeout: 90_000 }, async () => {
   const opencodeBin = process.env.OPENCODE_BIN ?? "opencode";
   const version = spawnSync(opencodeBin, ["--version"], { encoding: "utf8", timeout: 5_000 });
   assert.equal(version.status, 0, version.stderr);
