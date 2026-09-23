@@ -685,9 +685,9 @@ export function createVariantRouterHooks(rawConfig: unknown, dependencies: Pipel
 
   const runAgentParams = async (input: ParamsInput, output: ParamsOutput): Promise<void> => {
     if (disposed) return;
-    // OpenCode reuses chat.params for its internal title request after the primary turn.
-    // It is not part of the committed agent route and must not invalidate that route.
-    if (input.agent === "title") return;
+    // OpenCode reuses chat.params for ancillary agents after the primary turn.
+    // Non-ring work is not part of the committed route and must not invalidate it.
+    if (!ringAgent(input.agent)) return;
     const messageID = input.message.id;
     const messageSessionID = input.message.sessionID;
     if (!messageID || !messageSessionID) return;

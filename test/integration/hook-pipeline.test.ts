@@ -1163,18 +1163,22 @@ describe("two-phase hook pipeline", () => {
     expect(store.size).toBe(0);
   });
 
-  test("ignores OpenCode's internal title params without invalidating the committed route", async () => {
+  test("ignores OpenCode's ancillary params without invalidating the committed route", async () => {
     const snapshot = ringTopology();
     const hooks = createVariantRouterHooks(ringConfig(), {
       agentClient: { async route(request) { return ringResponse(request, "sol", "high"); } },
       agentTopology: ringTopologySource(snapshot),
       now: () => 100,
     });
-    const output = ringMessageOutput("title-bypass", "luna");
+    const output = ringMessageOutput("ancillary-bypass", "luna");
 
     await hooks["chat.message"]?.(ringMessageInput("session-1", "luna") as never, output as never);
-    const titleInput = { ...ringParamsInput(output.message), agent: "title" };
-    await hooks["chat.params"]?.(titleInput as never, paramsOutput() as never);
+    for (const agent of ["title", "summary", "compaction", "explore"]) {
+      const ancillaryInput = { ...ringParamsInput(output.message), agent };
+      const ancillaryParams = paramsOutput({ untouched: agent });
+      await hooks["chat.params"]?.(ancillaryInput as never, ancillaryParams as never);
+      expect(ancillaryParams.options).toEqual({ untouched: agent });
+    }
 
     const actualParams = paramsOutput();
     await hooks["chat.params"]?.(ringParamsInput(output.message) as never, actualParams as never);
