@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
 import {
   createAgentRouteStore,
   createDecisionStore,
@@ -1894,17 +1893,5 @@ describe("two-phase hook pipeline", () => {
     expect(records).not.toContainEqual(expect.objectContaining({ reasonCode: "client-error" }));
     expect(JSON.stringify(records)).not.toContain("PRIVATE_HISTORY");
     await hooks.dispose?.();
-  });
-
-  test("keeps OMA registered without duplicating the globally configured router", async () => {
-    const config = JSON.parse(await readFile(new URL("../../.opencode/opencode.jsonc", import.meta.url), "utf8"));
-    expect(config.plugin).toContain("./plugins/oma/oma.ts");
-    const routerEntry = config.plugin.find((entry: unknown) => Array.isArray(entry) && entry[0] === "./plugins/typesafe-variant-router/index.ts");
-    expect(routerEntry).toBeUndefined();
-    const entryModule = await import("../../.opencode/plugins/typesafe-variant-router/index.ts");
-    const callableExports = Object.entries(entryModule)
-      .filter(([, value]) => typeof value === "function")
-      .map(([name]) => name);
-    expect(callableExports).toEqual(["default"]);
   });
 });

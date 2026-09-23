@@ -1,0 +1,69 @@
+[tools]
+node = "24.21.0"
+bun = "1.3.11"
+"github:anomalyco/opencode" = "1.18.31"
+"github:rhysd/actionlint" = "1.7.12"
+
+[tasks.install]
+description = "Install locked npm dependencies"
+run = "npm ci"
+
+[tasks.typecheck]
+description = "Type-check without emitting files"
+run = "npm run typecheck"
+
+[tasks.test]
+description = "Run the complete offline test suite"
+run = "npm test"
+
+[tasks."test:contract"]
+description = "Run OpenCode contract tests"
+run = "npm run test:contract"
+
+[tasks."test:unit"]
+description = "Run unit tests"
+run = "npm run test:unit"
+
+[tasks."test:integration"]
+description = "Run integration tests"
+run = "npm run test:integration"
+
+[tasks."lint:workflows"]
+description = "Validate GitHub Actions workflows"
+run = "actionlint"
+
+[tasks.ci]
+description = "Run the local CI validation gate"
+depends = ["lint:workflows"]
+run = "npm run ci"
+
+[tasks."release:status"]
+description = "Show Release Please PRs, releases, and workflow runs"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+gh pr list --label "autorelease: pending" --state open
+gh release list --limit 5
+gh run list --workflow release.yml --limit 5
+'''
+
+[tasks."release:publish"]
+description = "Publish the release tag to npm through GitHub OIDC"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${GITHUB_ACTIONS:-}" != "true" ]]; then
+  echo "release:publish may run only in GitHub Actions" >&2
+  exit 1
+fi
+if [[ -z "${RELEASE_TAG:-}" ]]; then
+  echo "RELEASE_TAG is required" >&2
+  exit 1
+fi
+version="$(node -p "require('./package.json').version")"
+if [[ "${RELEASE_TAG}" != "v${version}" ]]; then
+  echo "release tag ${RELEASE_TAG} does not match package version v${version}" >&2
+  exit 1
+fi
+npm publish --provenance --access public
+'''

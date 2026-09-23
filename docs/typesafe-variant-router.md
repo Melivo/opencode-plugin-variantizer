@@ -259,3 +259,5 @@ The harness does not import a live SDK client and makes neither TypeSafe nor Ope
 ## Separate release gates
 
 A **live evaluation against TypeSafe is not authorized** and requires separate future approval because it transmits data externally and incurs costs. **Build, bundle, packaging, and npm publishing are also not authorized**; npm publication is a separate future gate. The offline result does not imply approval to publish.
+
+Release automation is configured separately: Release Please may prepare a version/changelog pull request, but npm publication occurs only after that release pull request is reviewed and merged and npm Trusted Publishing is configured for `.github/workflows/release.yml` with the `npm` environment.

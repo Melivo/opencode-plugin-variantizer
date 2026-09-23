@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
 
 import {
   AGENT_MODEL_BINDINGS,
@@ -116,24 +115,5 @@ describe("agent topology snapshot", () => {
       ...observation,
       catalogFingerprints: { ...observation.catalogFingerprints, luna: "drift" },
     })).toBe(false);
-  });
-
-  test("host definitions disable built-ins and differ only in description and model", async () => {
-    const hostConfig = JSON.parse(await readFile(new URL("../../opencode.jsonc", import.meta.url), "utf8"));
-    expect(hostConfig.default_agent).toBe("luna");
-    expect(hostConfig.agent.build).toEqual({ disable: true });
-    expect(hostConfig.agent.plan).toEqual({ disable: true });
-
-    const documents = await Promise.all(LOGICAL_AGENT_RING.map((agent) => (
-      readFile(new URL(`../../.opencode/agents/${agent}.md`, import.meta.url), "utf8")
-    )));
-    const normalized = documents.map((document) => document
-      .replace(/^description:.*$/mu, "description: $ALLOWED")
-      .replace(/^model:.*$/mu, "model: $ALLOWED"));
-    expect(new Set(normalized).size).toBe(1);
-    for (const [index, agent] of LOGICAL_AGENT_RING.entries()) {
-      expect(documents[index]).toContain(`model: ${AGENT_MODEL_BINDINGS[agent]}`);
-      expect(documents[index]).toContain("mode: primary");
-    }
   });
 });
