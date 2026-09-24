@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/Melivo/opencode-plugin-variantizer/compare/v0.2.0...v0.2.1) (2026-09-24)
+
+
+### Bug Fixes
+
+* **router:** retain routes across long tool cycles ([62e4423](https://github.com/Melivo/opencode-plugin-variantizer/commit/62e442372e93ef255104db72525c639c9a89700d))
+
 ## [0.2.0](https://github.com/Melivo/opencode-plugin-variantizer/compare/v0.1.0...v0.2.0) (2026-09-23)
 
 
