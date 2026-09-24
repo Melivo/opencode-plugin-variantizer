@@ -65,7 +65,7 @@ import {
 } from "./diagnostics.ts";
 
 const DEFAULT_STORE_TTL_MS = 30_000;
-const DEFAULT_COMMITTED_AGENT_ROUTE_TTL_MS = 30 * 60_000;
+const DEFAULT_COMMITTED_AGENT_ROUTE_TTL_MS = 24 * 60 * 60_000;
 const DEFAULT_STORE_CAPACITY = 256;
 const AGENT_PROFILES = Object.freeze({
   luna: "Use Luna for boilerplate, extraction, formatting, and simple helper tasks with objective verification. Select it only for narrow, low-risk, repeatable work with clear checks; do not use it for ambiguous changes, difficult architecture, or demanding autonomous repository work.",

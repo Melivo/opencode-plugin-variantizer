@@ -1244,13 +1244,13 @@ describe("two-phase hook pipeline", () => {
     const routed = ringMessageOutput("long-agent-cycle", "luna");
     await hooks["chat.message"]?.(ringMessageInput("session-1", "luna") as never, routed as never);
 
-    now = 30_001;
+    now = 35 * 60_000;
     const first = paramsOutput();
     await hooks["chat.params"]?.(ringParamsInput(routed.message) as never, first as never);
     expect(first.options).toEqual({ reasoningEffort: "high" });
     expect(timerDelays.at(-1)).toBe(20);
 
-    now = 60_002;
+    now = 70 * 60_000;
     const repeated = paramsOutput();
     await hooks["chat.params"]?.(ringParamsInput(routed.message) as never, repeated as never);
     expect(repeated.options).toEqual({ reasoningEffort: "high" });
